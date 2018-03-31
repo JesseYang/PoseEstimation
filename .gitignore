@@ -5,3 +5,4 @@ train_log
 .ipynb_checkpoints
 data
 datasets
+coco

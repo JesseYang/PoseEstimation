@@ -1,6 +1,8 @@
 from pathlib import Path
+import pickle
+import os
 import sys
-sys.path.insert(1, '../data/coco/PythonAPI/')
+sys.path.insert(1, '../coco/PythonAPI/')
 from pycocotools.coco import COCO
 
 from tensorpack import *
@@ -13,7 +15,6 @@ import math
 from cfgs.config import cfg
 import random
 import time
-# from utils.preprocess import random_crop_and_pad_bottom_right, anno_to_ours, gen_mask, gen_heatmaps, gen_pafs, compute_neck, generate_heatmap
 
 from utils.new_preprocess import random_crop_and_pad_bottom_right, persons_to_keypoints, gen_mask, gen_heatmap, gen_paf, get_coords, anno_to_ours
 from utils import io
@@ -21,92 +22,13 @@ coco_to_ours = cfg.coco_to_ours
 limb_seq = cfg.limb_seq
 stride = cfg.stride
 
-cropped_shape = (368, 368)
+class Point(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
-def read_data(coco, img_id):
-    """
-    # Arguments
-        coco: COCO对象
-        img_id: img_id
-    """
-    img_dict = coco.imgs[img_id]
-    img_anns = coco.loadAnns(coco.getAnnIds(imgIds = img_id))
-
-    persons = anno_to_ours(img_anns)
-    if len(persons) == 0: return
-
-
-    # 读取图片
-    img_name = coco.imgs[img_id]['file_name']
-    img = io.imread(img_name)
-    # 生成mask
-    mask_all, mask_miss = gen_mask(img, coco, img_anns)
-    # 随机crop, pad
-    img, mask_all, info = random_crop_and_pad_bottom_right(img, mask_all, (368, 368))
-    mask_all = cv2.resize(mask_all, None, fx = 1 / stride, fy = 1 / stride)
-    # 生成Keypoints
-    keypoints = persons_to_keypoints(persons)
-    h_start, w_start = info[:2]
-    # 生成coords, 大小为46*46*2, 每个位置是对应的坐标, 以便加速后续的操作
-    coords = get_coords((h_start // stride, h_start // stride + 46), (w_start // stride, w_start // stride + 46))
-    # 生成HeatMap
-    heatmap = gen_heatmap(coords, keypoints, stride, cfg.gen_heatmap_th)
-    # 生成PAF
-    paf = gen_paf(coords, keypoints, stride, cfg.gen_paf_th)
-
-
-    # 参考: https://github.com/last-one/Pytorch_Realtime_Multi-Person_Pose_Estimation/blob/master/preprocessing/generate_json_mask.py
-    # 这个repo只保存了mask_miss ?
-    # 按个人理解, 还是应该输出mask_all的
-    # mask_all: 将每个人的segmentation标注(格式是多边形的每个点坐标), 转换为二值mask, 存在标注的keypoints肯定在Segmentation的范围内, 所以滤去mask以外的loss可以说得通
-    #           但是从loss上讲, 模型没有学习没有人的地方的结果为背景(heatmap_idx=19)这件事, 而是通过后处理的手段滤去了
-    # mask_miss: 可见get-started/preprocess.ipynb, 也是人, 但是is_crowd标注为1, 直观来看就是图中较小的人
-    return img, heatmap, paf, mask_all[:,:,np.newaxis]
-    
-
-
-
-
-    # ann_ids = coco.getAnnIds(imgIds = img_id)
-    # img_dict = coco.imgs[img_id]
-    # img_anns = coco.loadAnns(ann_ids)
-
-    # persons = anno_to_ours(img_anns)
-
-    # if len(persons) == 0: return
-
-    # # 读取图片并crop
-    # if img_dict['file_name'].find('train2014') > -1:
-    #     raw_img = misc.imread('data/coco/images/train2014/' + img_dict['file_name'])
-    # else:
-    #     raw_img = misc.imread('data/coco/images/val2014/' + img_dict['file_name'])
-    # if raw_img.ndim == 2:
-    #     raw_img = np.stack([raw_img]*3, axis = -1)
-
-    # mask_all, mask_miss = gen_mask(raw_img, coco, img_anns)
-
-    # img, mask_all, info = random_crop_and_pad_bottom_right(raw_img, mask_all, (368, 368))
-    # # img = raw_img[0+300:369+300, 0:369]
-    # # mask_all = mask_all[0+300:369+300, 0:369]
-    # mask_all = cv2.resize(mask_all, None, fx = 1 / stride, fy = 1 / stride)
-
-    # all_keypoints = []
-    # for idx, person in enumerate(persons):
-    #     keypoints = np.zeros((18,3)).tolist()
-    #     neck = compute_neck(person['keypoints'][5], person['keypoints'][6])
-    #     keypoints = np.stack(person['keypoints']+[neck])
-    #     # 交换part的顺序和y,x的顺序
-    #     keypoints = keypoints[coco_to_ours, :][:, [1, 0, 2]]
-    #     all_keypoints.append(keypoints)
-
-    # # heatmaps = gen_heatmaps(img, info, all_keypoints, 8, th1)
-    # ht = np.zeros((46, 46, 19))
-    # heatmaps = generate_heatmap(ht, all_keypoints, 8, 1)
-    # pafs = gen_pafs(img, info, all_keypoints, 8, th2)
-
-    # # TODO: 返回mask
-    # return [img, heatmaps, pafs, mask_all[:,:,np.newaxis]]
-
+    def norm(self):
+        return np.sqrt(self.x * self.x + self.y * self.y)
 
 class Data(RNGDataFlow):
     def __init__(self, train_or_test, shuffle):
@@ -114,39 +36,135 @@ class Data(RNGDataFlow):
 
         assert train_or_test in ['train', 'test']
 
-        # Load Annotations
-        self.d = {}
-        for anno_path in cfg.anno_paths:
-            ann_name = anno_path.split('/')[-1]
-            coco = COCO(anno_path)
-            self.d[ann_name] = coco
-        
-        path_list = cfg.train_list if train_or_test == 'train' else cfg.test_list
-        content = []
-        for path in path_list:
-            with open(path, 'r') as f:
-                content.extend(f.readlines())
+        self.anno_path = cfg.train_ann if train_or_test == 'train' else cfg.val_ann
+        self.labels_dir = cfg.train_labels_dir if train_or_test == 'train' else cfg.val_labels_dir
+        self.masks_dir = cfg.train_masks_dir if train_or_test == 'train' else cfg.val_masks_dir
+        self.images_dir = cfg.train_images_dir if train_or_test == 'train' else cfg.val_images_dir
+        coco = COCO(self.anno_path)
 
-        # Load Paths
-        self.data = [x.strip() for x in content]
+        img_id_list = coco.imgs.keys()
+        self.img_id_list = [e for e in list(img_id_list) if os.path.isfile(os.path.join(self.labels_dir, "label_%012d" % e)) == True]
 
         self.shuffle = shuffle
 
 
     def size(self):
-        return len(self.data)
+        return len(self.img_id_list)
 
 
     def get_data(self):
         if self.shuffle:
-            self.rng.shuffle(self.data)
+            self.rng.shuffle(self.img_id_list)
 
-        for line in self.data:
-            anno_name, img_id = line.split(',')
-            data = read_data(self.d[anno_name], int(img_id))
-            # print(data)
-            if data is None: continue
-            yield data
+        for img_id in self.img_id_list:
+
+            # read img, mask, and label data
+            img_path = os.path.join(self.images_dir, '%012d.jpg' % img_id)
+            img = cv2.imread(img_path)
+
+            mask_path = os.path.join(self.masks_dir, "mask_miss_%012d.png" % img_id)
+            mask = cv2.imread(mask_path, 0)
+
+            label_path = os.path.join(self.labels_dir, "label_%012d" % img_id)
+            f = open(label_path, 'rb')
+            label = pickle.load(f)
+
+            # convert to model input format
+            img = cv2.resize(img, (cfg.img_y, cfg.img_x))
+            mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
+
+            # create blank heat map
+            heat_maps = np.zeros((cfg.grid_y, cfg.grid_x, cfg.ch_heats))
+
+            # create blank paf
+            paf = np.zeros((cfg.grid_y, cfg.grid_x, cfg.ch_vectors))
+
+            start = cfg.stride / 2.0 - 0.5
+
+            for i in range(cfg.ch_heats - 1): # for each keypoint
+                for person_label in label:
+                    if person_label['joint'][i, 2] > 1: # cropped or unlabeled
+                        continue
+
+                    x_center = person_label['joint'][i, 0]
+                    y_center = person_label['joint'][i, 1]
+                    for g_y in range(cfg.grid_y):
+                        for g_x in range(cfg.grid_x):
+                            x = start + g_x * cfg.stride
+                            y = start + g_y * cfg.stride
+
+                            d2 = (x - x_center) * (x - x_center) + (y - y_center) * (y - y_center)
+                            exponent = d2 / 2.0 / cfg.sigma / cfg.sigma
+                            if exponent > 4.6052:
+                                # //ln(100) = -ln(1%)
+                                continue;
+                            val = min(np.exp(-exponent), 1)
+
+                            # maximum in original paper, but sum in keras implementation
+                            if val > heat_maps[g_y, g_x, i]:
+                                heat_maps[g_y, g_x, i] = val
+
+            # the background channel
+            for g_y in range(cfg.grid_y):
+                for g_x in range(cfg.grid_x):
+                    max_val = np.max(heat_maps[g_y, g_x, :])
+                    heat_maps[g_y, g_x, cfg.ch_heats - 1] = 1 - max_val
+
+            for i in range(int(cfg.ch_vectors / 2)):
+                limb_from_kp = cfg.limb_from[i]
+                limb_to_kp = cfg.limb_to[i]
+                count = np.zeros((cfg.grid_y, cfg.grid_x))
+
+                for person_label in label:
+                    # get keypoint coord in the label map
+                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] / 8,
+                                      y=person_label['joint'][limb_from_kp, 1] / 8)
+                    limb_from_v = person_label['joint'][limb_from_kp, 2]
+
+                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] / 8,
+                                    y=person_label['joint'][limb_to_kp, 1] / 8)
+                    limb_to_v = person_label['joint'][limb_to_kp, 2]
+
+                    if limb_from_v > 1 or limb_to_v > 1:
+                        continue
+
+                    bc = Point(x=limb_to.x-limb_from.x,
+                               y=limb_to.y-limb_from.y)
+                    norm_bc = bc.norm()
+                    if norm_bc < 1e-8:
+                        continue
+
+                    bc = Point(x=bc.x/norm_bc,
+                               y=bc.y/norm_bc)
+
+                    min_x = int(max(round(min(limb_from.x, limb_to.x) - cfg.thre), 0))
+                    max_x = int(min(round(max(limb_from.x, limb_to.x) + cfg.thre), cfg.grid_x))
+
+                    min_y = int(max(round(min(limb_from.y, limb_to.y) - cfg.thre), 0))
+                    max_y = int(min(round(max(limb_from.y, limb_to.y) + cfg.thre), cfg.grid_y))
+                    
+                    for g_y in range(min_y, max_y):
+                        for g_x in range(min_x, max_x):
+                            ba = Point(x=g_x-limb_from.x,
+                                       y=g_y-limb_from.y)
+                            dist = np.abs(ba.x * bc.y - ba.y * bc.x)
+
+                            if dist > cfg.thre:
+                                continue
+                            paf[g_y, g_x, i * 2] += bc.x
+                            paf[g_y, g_x, i * 2 + 1] += bc.y
+                            count[g_y, g_x] += 1
+
+                for g_y in range(0, cfg.grid_y):
+                    for g_x in range(0, cfg.grid_x):
+                        if count[g_y, g_x] > 0:
+                            paf[g_y, g_x, i * 2] = paf[g_y, g_x, i * 2] / count[g_y, g_x]
+                            paf[g_y, g_x, i * 2 + 1] = paf[g_y, g_x, i * 2 + 1] / count[g_y, g_x]
+
+            heat_maps = heat_maps * np.expand_dims(mask, axis=2)
+            paf = paf * np.expand_dims(mask, axis=2)
+
+            yield [img, heat_maps, paf, mask]
 
 
     def reset_state(self):
@@ -157,8 +175,9 @@ if __name__ == '__main__':
     ds = Data('train', False)
     
     g = ds.get_data()
-    # print(ds.size())
+    sample = next(g)
+    '''
     for i in g:
         img, heatmaps, pafs, mask_all = i
         print(mask_all.shape)
-        # print(np.min(i[1]), np.max(i[1]), np.min(i[2]), np.max(i[2]))
+    '''

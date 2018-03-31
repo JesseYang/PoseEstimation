@@ -14,7 +14,6 @@ h, w = cfg.crop_size_y, cfg.crop_size_x
 stride = cfg.stride
 stages = cfg.stages
 
-
 """
 COCO数据集中
 train2014  : 82783 个样本
