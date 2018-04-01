@@ -14,15 +14,6 @@ h, w = cfg.crop_size_y, cfg.crop_size_x
 stride = cfg.stride
 stages = cfg.stages
 
-"""
-COCO数据集中
-train2014  : 82783 个样本
-val2014    : 40504 个样本
-数据集生成的时候，将val2014中的前2644个样本标记位 'isValidation = 1'
-所以用于训练的样本数为 82783+40504-2644 = 120643
-这里设置，我们训练model的总样本数为 6000000
-"""
-
 def apply_mask(t, mask):
     return t * mask
 
@@ -44,11 +35,9 @@ def image_preprocess(image, bgr = True):
 
 class Model(ModelDesc):
 
-    
-    def __init__(self, mode = 'train'):
+    def __init__(self, mode='train'):
         self.is_train = mode == 'train'
         self.apply_mask = self.is_train
-
 
     def _get_inputs(self):
         return [
@@ -58,7 +47,6 @@ class Model(ModelDesc):
             InputDesc(tf.float32, (None, None, None, 1), 'mask')
         ]
 
-
     def _build_graph(self, inputs):
         """
         inputs: (b, h, w, c)
@@ -66,20 +54,33 @@ class Model(ModelDesc):
             - part_confidence_maps (b, h, w, c')
             - part_affinity_fields (b, h, w, 2c')
         """
-        with tf.device('/gpu:1'):
-            imgs, gt_heatmaps, gt_pafs, mask = inputs#, mask_heatmaps, mask_pafs = inputs
+        imgs, gt_heatmaps, gt_pafs, mask = inputs#, mask_heatmaps, mask_pafs = inputs
     
-            # ========================== Preprocess ==========================
-            imgs = image_preprocess(imgs, bgr = False)
+        # ========================== Preprocess ==========================
+        imgs = image_preprocess(imgs, bgr=False)
 
-            # ========================== Forward ==========================
-            heatmap_outputs, paf_outputs = [], []
-            vgg_output = VGGBlock('VGG', imgs)
+        # ========================== Forward ==========================
+        heatmap_outputs, paf_outputs = [], []
+        vgg_output = VGGBlock('VGG', imgs)
 
-            # Stage 1
-            branch1, branch2 = Stage1Block('Stage1', vgg_output, 1), Stage1Block('Stage1', vgg_output, 2)
+        # Stage 1
+        branch1, branch2 = Stage1Block('stage_1', vgg_output, 1), Stage1Block('stage_1', vgg_output, 2)
+        l = tf.concat([branch1, branch2, vgg_output], axis = -1)
+
+        if self.apply_mask:
+            w1 = apply_mask(branch1, mask)
+            w2 = apply_mask(branch2, mask)
+            heatmap_outputs.append(w1)
+            paf_outputs.append(w2)
+        else:
+            heatmap_outputs.append(branch1)
+            paf_outputs.append(branch2)
+
+        # Stage T
+        for i in range(2, stages + 1):
+            branch1, branch2 = StageTBlock('stage_{}'.format(i), l, 1), StageTBlock('stage_{}'.format(i), l, 2)
             l = tf.concat([branch1, branch2, vgg_output], axis = -1)
-
+            
             if self.apply_mask:
                 w1 = apply_mask(branch1, mask)
                 w2 = apply_mask(branch2, mask)
@@ -89,63 +90,49 @@ class Model(ModelDesc):
                 heatmap_outputs.append(branch1)
                 paf_outputs.append(branch2)
 
-            # Stage T
-            for i in range(2, stages + 1):
-                branch1, branch2 = StageTBlock('Stage{}'.format(i), l, 1), StageTBlock('Stage{}'.format(i), l, 2)
-                l = tf.concat([branch1, branch2, vgg_output], axis = -1)
-                
-                if self.apply_mask:
-                    w1 = apply_mask(branch1, mask)
-                    w2 = apply_mask(branch2, mask)
-                    heatmap_outputs.append(w1)
-                    paf_outputs.append(w2)
-                else:
-                    heatmap_outputs.append(branch1)
-                    paf_outputs.append(branch2)
+
+        # ========================== Cost Functions ==========================
+        loss_total = 0
+        loss1_total = 0
+        loss2_total = 0
+        batch_size = tf.shape(imgs)[0]
+
+        # heat_weight = 46 * 46 * 19 / 2.0 # for convenient to compare with origin code
+        # vec_weight = 46 * 46 * 38 / 2.0
+        for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
+            # tf.losses.mean_squared_error是对所有element求平均
+            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps)# * heat_weight
+            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs)# * vec_weight
+            loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / batch_size
+            loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / batch_size
+            loss1_total += loss1
+            loss2_total += loss2
+            loss_total += (loss1 + loss2)
+
+        if cfg.weight_decay > 0:
+            wd_cost = regularize_cost('.*/W', l2_regularizer(cfg.weight_decay), name='l2_regularize_loss')
+        else:
+            wd_cost = tf.constant(0.0)
+        self.cost = tf.add_n([loss_total, wd_cost], name='cost')
 
 
-            # ========================== Cost Functions ==========================
-            loss_total = 0
-            loss1_total = 0
-            loss2_total = 0
-            batch_size = tf.shape(imgs)[0]
-
-            heat_weight = 46 * 46 * 19 / 2.0 # for convenient to compare with origin code
-            vec_weight = 46 * 46 * 38 / 2.0
-            for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-                # tf.losses.mean_squared_error是对所有element求平均
-                loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps)# * heat_weight
-                loss2 = tf.losses.mean_squared_error(gt_pafs, pafs)# * vec_weight
-                # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / 1
-                # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / 1
-                loss1_total += loss1
-                loss2_total += loss2
-                loss_total += (loss1 + loss2)
-
-            if cfg.weight_decay > 0:
-                wd_cost = regularize_cost('.*/W', l2_regularizer(cfg.weight_decay), name='l2_regularize_loss')
-            else:
-                wd_cost = tf.constant(0.0)
-            self.cost = tf.add_n([loss_total, wd_cost], name='cost')
+        # ========================== Summary & Outputs ==========================
+        tf.summary.image(name = 'Image', tensor = imgs, max_outputs=3)
+        tf.summary.image(name = 'Mask', tensor = mask, max_outputs=3)
+        output1 = tf.identity(heatmap_outputs[-1],  name = 'HeatMaps')
+        output2 = tf.identity(paf_outputs[-1], name = 'PAFs')
 
 
-            # ========================== Summary & Outputs ==========================
-            tf.summary.image(name = 'Image', tensor = imgs, max_outputs=3)
-            tf.summary.image(name = 'Mask', tensor = mask, max_outputs=3)
-            output1 = tf.identity(heatmap_outputs[-1],  name = 'HeatMaps')
-            output2 = tf.identity(paf_outputs[-1], name = 'PAFs')
+        add_moving_summary(self.cost)
+        add_moving_summary(tf.identity(loss1_total, name = 'HeatMapLoss'))
+        add_moving_summary(tf.identity(loss2_total, name = 'PAFLoss'))
 
-
-            add_moving_summary(self.cost)
-            add_moving_summary(tf.identity(loss1_total, name = 'HeatMapLoss'))
-            add_moving_summary(tf.identity(loss2_total, name = 'PAFLoss'))
-
-            # ht = tf.reduce_sum(gt_heatmaps, axis = -1)
-            # xht = tf.reduce_sum(heatmap_outputs[-1], axis = -1)
-            # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
-            # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-            # tf.summary.image(name = 'GT_HeatMap', tensor = ht, max_outputs=3)
-            # tf.summary.image(name = 'HeatMap', tensor = xht, max_outputs=3)
+        # ht = tf.reduce_sum(gt_heatmaps, axis = -1)
+        # xht = tf.reduce_sum(heatmap_outputs[-1], axis = -1)
+        # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
+        # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
+        # tf.summary.image(name = 'GT_HeatMap', tensor = ht, max_outputs=3)
+        # tf.summary.image(name = 'HeatMap', tensor = xht, max_outputs=3)
         
 
     def _get_optimizer(self):

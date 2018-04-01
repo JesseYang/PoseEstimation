@@ -16,12 +16,6 @@ from cfgs.config import cfg
 import random
 import time
 
-from utils.new_preprocess import random_crop_and_pad_bottom_right, persons_to_keypoints, gen_mask, gen_heatmap, gen_paf, get_coords, anno_to_ours
-from utils import io
-coco_to_ours = cfg.coco_to_ours
-limb_seq = cfg.limb_seq
-stride = cfg.stride
-
 class Point(object):
     def __init__(self, x, y):
         self.x = x
@@ -31,7 +25,7 @@ class Point(object):
         return np.sqrt(self.x * self.x + self.y * self.y)
 
 class Data(RNGDataFlow):
-    def __init__(self, train_or_test, shuffle):
+    def __init__(self, train_or_test, shuffle, debug=False):
         super(Data, self).__init__()
 
         assert train_or_test in ['train', 'test']
@@ -46,6 +40,9 @@ class Data(RNGDataFlow):
         self.img_id_list = [e for e in list(img_id_list) if os.path.isfile(os.path.join(self.labels_dir, "label_%012d" % e)) == True]
 
         self.shuffle = shuffle
+
+        if debug == True:
+            self.img_id_list = self.img_id_list[:50]
 
 
     def size(self):
