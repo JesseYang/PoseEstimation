@@ -71,9 +71,10 @@ cfg.gen_paf_th = 40
 cfg.crop_size_x = 368
 cfg.crop_size_y = 368
 
-cfg.base_lr = 4e-5
+cfg.base_lr = 4e-7
 cfg.momentum = 0.9
-cfg.weight_decay = 5e-4
+# cfg.weight_decay = 5e-4
+cfg.weight_decay = 0.0
 # ============================================================
 #                       后处理
 # ============================================================

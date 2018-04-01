@@ -1,7 +1,9 @@
 import functools
+import os
 from pathlib import Path
 
 
+import argparse
 from tensorpack import *
 from operator import itemgetter
 from itertools import groupby
@@ -17,10 +19,6 @@ import pdb
 from utils.postprocess import get_peaks, get_connections, multi_person_parse
 from utils.visualize import visualize_heatmaps, visualize_matchsticks
 from utils.new_preprocess import pad_right_down_corner
-
-def load_labels(path):
-    pass
-
 
 def _predict(img, pred_func):
     stride = cfg.stride
@@ -71,54 +69,6 @@ def _predict(img, pred_func):
 
 
 
-    # img_h, img_w = raw_img.shape[:2]
-    # img = np.expand_dims(raw_img, 0)
-    # heatmap_avg = np.zeros((img_h, img_w, cfg.ch_heats))
-    # paf_avg = np.zeros((img_h, img_w, cfg.ch_vectors))
-
-    # heatmap, paf = pred_func(img)
-    # b = np.squeeze(heatmap[:,:,0])
-    # print(b.shape)
-    # b = cv2.resize(b, None, fx = 8, fy = 8, interpolation=cv2.INTER_CUBIC)
-    # print(b.shape)
-    # quit()
-
-    # resized_heatmaps = np.array([cv2.resize(np.squeeze(heatmap[:,:,i]), (0,0), 8, 8) for i in range(19)])
-
-    # print(resized_heatmaps.shape)
-    # quit()
-    # # heatmap = cv2.resize(heatmap, None, 8, 8)
-    # print(heatmap.shape)
-    # quit()
-    # outputs = visualize_heatmaps(raw_img, heatmap)
-    # for idx, output in enumerate(outputs):
-    #     imageio.imsave('heatmap-{}.png'.format(idx), output)
-    # print(np.min(heatmap), np.max(heatmap))
-    # print(np.min(paf), np.max(paf))
-
-    # quit()
-
-    # peaks = get_peaks(heatmap_avg, cfg.th1)
-    # all_connections, special_limb_idx = get_connections(peaks, paf_avg, cfg.th2)
-    # persons = multi_person_parse(peaks, all_connections, special_limb_idx)
-    
-    # res = visualize_matchsticks(raw_img, peaks, persons)
-
-
-    # heatmap_outputs = visualize_heatmaps(raw_img, heatmap)
-    # # print(type(res), res.shape)
-    # print(len(peaks), len(all_connections), len(persons))
-    # print(len(res))
-    # for idx, res_ in enumerate(res):
-    #     print(res_.shape)
-    #     imageio.imsave('output{}.png'.format(idx), res_)
-    # return res
-
-
-def _eval(img, labels, predict_func):
-    pass
-
-
 def predict(args):
     # prepare predictor
     sess_init = SaverRestore(args.model_path)
@@ -129,35 +79,30 @@ def predict(args):
                                    output_names = ['HeatMaps', 'PAFs'])
     predict_func = OfflinePredictor(predict_config)
 
-    # load data
-    # get_data(txt_path)
-    # if args.from_sintel is None:
-    #     inputs = load_frames(args.input_path)
-    # else:
-    #     inputs = sintel_helper(args.input_path)
+    img = cv2.imread(args.input_path)
 
-    img = imageio.imread(args.input_path)
+    img = cv2.resize(img, (cfg.img_y, cfg.img_x))
 
+    import pdb
+    pdb.set_trace()
 
-    # if args.eval:
-    heatmap, paf = _predict(img, predict_func)
-    # else:
-    #     print('ww')
-    #     labels = load_labels(args.label_path)
-    #     _eval(img, labels, predict_func)
+    img = np.expand_dims(img, axis=0)
 
-    print(heatmap, paf)
+    heatmap, paf = predict_func(img)
+
+    # heatmap, paf = _predict(img, predict_func)
+
+    # print(heatmap, paf)
 
 
 if __name__ == '__main__':
-    import argparse
+
+    img_id = 262145
+    img_path = os.path.join('coco/train2017', '%012d.jpg' % img_id)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', help='path of model', required = True)
-    parser.add_argument('--input_path', help='path of input data', required = True)
-    parser.add_argument('--label_path', help='path of input data')
-    parser.add_argument('--eval', help='path of input data', action='store_true')
-    parser.add_argument('--output_path', help='path of outputs')
+    parser.add_argument('--input_path', help='path of input data', default=img_path)
     args = parser.parse_args()
 
     predict(args)

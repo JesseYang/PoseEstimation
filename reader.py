@@ -42,7 +42,7 @@ class Data(RNGDataFlow):
         self.shuffle = shuffle
 
         if debug == True:
-            self.img_id_list = self.img_id_list[:50]
+            self.img_id_list = self.img_id_list[:8]
 
 
     def size(self):
@@ -67,6 +67,7 @@ class Data(RNGDataFlow):
             label = pickle.load(f)
 
             # convert to model input format
+            raw_h, raw_w, _ = img.shape
             img = cv2.resize(img, (cfg.img_y, cfg.img_x))
             mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
 
@@ -83,8 +84,8 @@ class Data(RNGDataFlow):
                     if person_label['joint'][i, 2] > 1: # cropped or unlabeled
                         continue
 
-                    x_center = person_label['joint'][i, 0]
-                    y_center = person_label['joint'][i, 1]
+                    x_center = person_label['joint'][i, 0] * cfg.img_x / raw_w
+                    y_center = person_label['joint'][i, 1] * cfg.img_y / raw_h
                     for g_y in range(cfg.grid_y):
                         for g_x in range(cfg.grid_x):
                             x = start + g_x * cfg.stride
@@ -114,12 +115,12 @@ class Data(RNGDataFlow):
 
                 for person_label in label:
                     # get keypoint coord in the label map
-                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] / 8,
-                                      y=person_label['joint'][limb_from_kp, 1] / 8)
+                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] * cfg.img_x / raw_w / 8,
+                                      y=person_label['joint'][limb_from_kp, 1] * cfg.img_y / raw_h / 8)
                     limb_from_v = person_label['joint'][limb_from_kp, 2]
 
-                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] / 8,
-                                    y=person_label['joint'][limb_to_kp, 1] / 8)
+                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] * cfg.img_x / raw_w / 8,
+                                    y=person_label['joint'][limb_to_kp, 1] * cfg.img_y / raw_h / 8)
                     limb_to_v = person_label['joint'][limb_to_kp, 2]
 
                     if limb_from_v > 1 or limb_to_v > 1:
@@ -158,8 +159,9 @@ class Data(RNGDataFlow):
                             paf[g_y, g_x, i * 2] = paf[g_y, g_x, i * 2] / count[g_y, g_x]
                             paf[g_y, g_x, i * 2 + 1] = paf[g_y, g_x, i * 2 + 1] / count[g_y, g_x]
 
-            heat_maps = heat_maps * np.expand_dims(mask, axis=2)
-            paf = paf * np.expand_dims(mask, axis=2)
+            mask = np.expand_dims(mask, axis=2)
+            heat_maps = heat_maps * mask
+            paf = paf * mask
 
             yield [img, heat_maps, paf, mask]
 

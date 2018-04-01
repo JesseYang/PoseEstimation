@@ -6,3 +6,5 @@ train_log
 data
 datasets
 coco
+*.jpg
+*.npy

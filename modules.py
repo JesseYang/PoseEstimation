@@ -7,40 +7,40 @@ from cfgs.config import cfg
 def VGGBlock_official(l):
     with argscope(Conv2D, kernel_shape=3, nl=tf.nn.relu):
         l = (LinearWrap(l)
-             .Conv2D('Conv1_1', 64)
-             .Conv2D('Conv1_2', 64)
-             .MaxPooling('MaxPooling1', 2)
-             .Conv2D('Conv2_1', 128)
-             .Conv2D('Conv2_2', 128)
-             .MaxPooling('MaxPooling2', 2)
-             .Conv2D('Conv3_1', 256)
-             .Conv2D('Conv3_2', 256)
-             .Conv2D('Conv3_3', 256)
-             .Conv2D('Conv3_4', 256)
-             .MaxPooling('MaxPooling3', 2)
-             .Conv2D('Conv4_1', 128)
-             .Conv2D('Conv4_2', 128)())
+             .Conv2D('conv1_1', 64)
+             .Conv2D('conv1_2', 64)
+             .MaxPooling('pool1', 2)
+             .Conv2D('conv2_1', 128)
+             .Conv2D('conv2_2', 128)
+             .MaxPooling('pool2', 2)
+             .Conv2D('conv3_1', 256)
+             .Conv2D('conv3_2', 256)
+             .Conv2D('conv3_3', 256)
+             .Conv2D('conv3_4', 256)
+             .MaxPooling('pool3', 2)
+             .Conv2D('conv4_1', 512)
+             .Conv2D('conv4_2', 512)())
     
     return l
 
 
-@layer_register(log_shape=True)
+# @layer_register(log_shape=True)
 def VGGBlock_ours(l):
     with argscope(Conv2D, kernel_shape=3, nl=tf.nn.relu):
         l = (LinearWrap(l)
-             .Conv2D('Conv1_1', 64)
-             .Conv2D('Conv1_2', 64)
-             .MaxPooling('MaxPooling1', 2)
-             .Conv2D('Conv2_1', 128)
-             .Conv2D('Conv2_2', 128)
-             .MaxPooling('MaxPooling2', 2)
-             .Conv2D('Conv3_1', 256)
-             .Conv2D('Conv3_2', 256)
-             .Conv2D('Conv3_3', 256)
-             .MaxPooling('MaxPooling3', 2)
-             .Conv2D('Conv4_1', 512)
-             .Conv2D('Conv4_2', 512)
-             .Conv2D('Conv4_3', 512)())
+             .Conv2D('conv1_1', 64)
+             .Conv2D('conv1_2', 64)
+             .MaxPooling('pool1', 2)
+             .Conv2D('conv2_1', 128)
+             .Conv2D('conv2_2', 128)
+             .MaxPooling('pool2', 2)
+             .Conv2D('conv3_1', 256)
+             .Conv2D('conv3_2', 256)
+             .Conv2D('conv3_3', 256)
+             .MaxPooling('pool3', 2)
+             .Conv2D('conv4_1', 512)
+             .Conv2D('conv4_2', 512)
+             .Conv2D('conv4_3', 512)())
     
     return l
 
@@ -49,17 +49,17 @@ def VGGBlock_ours(l):
 def Stage1Block(l, branch):
     assert branch in [1, 2]
     
-    branch_str = 'Branch{}/'.format(branch)
     ch_out = cfg.ch_heats if branch == 1 else cfg.ch_vectors
 
     with tf.variable_scope('branch_%d' % branch):
-        with argscope(Conv2D, nl=tf.nn.relu):
+        with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
             l = (LinearWrap(l)
                  .Conv2D('conv1', 128, 3)
                  .Conv2D('conv2', 128, 3)
                  .Conv2D('conv3', 128, 3)
                  .Conv2D('conv4', 512, 1)
-                 .Conv2D('conv5', ch_out, 1)())
+                 # .Conv2D('conv5', ch_out, 1)())
+                 .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
 
     return l
 
@@ -71,7 +71,7 @@ def StageTBlock(l, branch):
     ch_out = cfg.ch_heats if branch == 1 else cfg.ch_vectors
 
     with tf.variable_scope('branch_%d' % branch):
-        with argscope(Conv2D, nl=tf.nn.relu):
+        with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
             l = (LinearWrap(l)
                  .Conv2D('conv1', 128, 7)
                  .Conv2D('conv2', 128, 7)
@@ -79,6 +79,7 @@ def StageTBlock(l, branch):
                  .Conv2D('conv4', 128, 7)
                  .Conv2D('conv5', 128, 7)
                  .Conv2D('conv6', 128, 1)
-                 .Conv2D('conv7', ch_out, 1)())
+                 # .Conv2D('conv7', ch_out, 1)())
+                 .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
 
     return l

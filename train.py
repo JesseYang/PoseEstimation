@@ -11,8 +11,6 @@ from utils.session_init import get_model_loader_from_vgg as _get_model_loader
 
 import os
 h, w = cfg.crop_size_y, cfg.crop_size_x
-stride = cfg.stride
-stages = cfg.stages
 
 def apply_mask(t, mask):
     return t * mask
@@ -41,27 +39,25 @@ class Model(ModelDesc):
 
     def _get_inputs(self):
         return [
-            InputDesc(tf.float32, (None, None, None, 3), 'imgs'),
-            InputDesc(tf.float32, (None, None, None, 19), 'gt_heatmaps'),
-            InputDesc(tf.float32, (None, None, None, 38), 'gt_pafs'),
-            InputDesc(tf.float32, (None, None, None, 1), 'mask')
+            InputDesc(tf.float32, (None, cfg.img_y, cfg.img_x, 3), 'imgs'),
+            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, cfg.ch_heats), 'gt_heatmaps'),
+            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, cfg.ch_vectors), 'gt_pafs'),
+            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, 1), 'mask')
         ]
 
     def _build_graph(self, inputs):
-        """
-        inputs: (b, h, w, c)
-        outputs:
-            - part_confidence_maps (b, h, w, c')
-            - part_affinity_fields (b, h, w, 2c')
-        """
         imgs, gt_heatmaps, gt_pafs, mask = inputs#, mask_heatmaps, mask_pafs = inputs
     
         # ========================== Preprocess ==========================
-        imgs = image_preprocess(imgs, bgr=False)
+        imgs = image_preprocess(imgs, bgr=True)
 
         # ========================== Forward ==========================
         heatmap_outputs, paf_outputs = [], []
-        vgg_output = VGGBlock('VGG', imgs)
+        vgg_output = VGGBlock(imgs)
+
+        vgg_output = tf.stop_gradient(vgg_output)
+
+        vgg_output = tf.identity(vgg_output, name='vgg_features')
 
         # Stage 1
         branch1, branch2 = Stage1Block('stage_1', vgg_output, 1), Stage1Block('stage_1', vgg_output, 2)
@@ -77,7 +73,7 @@ class Model(ModelDesc):
             paf_outputs.append(branch2)
 
         # Stage T
-        for i in range(2, stages + 1):
+        for i in range(2, cfg.stages + 1):
             branch1, branch2 = StageTBlock('stage_{}'.format(i), l, 1), StageTBlock('stage_{}'.format(i), l, 2)
             l = tf.concat([branch1, branch2, vgg_output], axis = -1)
             
@@ -97,14 +93,11 @@ class Model(ModelDesc):
         loss2_total = 0
         batch_size = tf.shape(imgs)[0]
 
-        # heat_weight = 46 * 46 * 19 / 2.0 # for convenient to compare with origin code
-        # vec_weight = 46 * 46 * 38 / 2.0
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            # tf.losses.mean_squared_error是对所有element求平均
-            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps)# * heat_weight
-            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs)# * vec_weight
-            loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / batch_size
-            loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / batch_size
+            loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
+            loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
+            # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
+            # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
             loss1_total += loss1
             loss2_total += loss2
             loss_total += (loss1 + loss2)
@@ -127,24 +120,22 @@ class Model(ModelDesc):
         add_moving_summary(tf.identity(loss1_total, name = 'HeatMapLoss'))
         add_moving_summary(tf.identity(loss2_total, name = 'PAFLoss'))
 
-        # ht = tf.reduce_sum(gt_heatmaps, axis = -1)
-        # xht = tf.reduce_sum(heatmap_outputs[-1], axis = -1)
-        # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
-        # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-        # tf.summary.image(name = 'GT_HeatMap', tensor = ht, max_outputs=3)
-        # tf.summary.image(name = 'HeatMap', tensor = xht, max_outputs=3)
+        ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
+        xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
+        tf.summary.image(name = 'GT_HeatMap', tensor = ht, max_outputs=3)
+        tf.summary.image(name = 'HeatMap', tensor = xht, max_outputs=3)
         
 
     def _get_optimizer(self):
         lr = get_scalar_var('learning_rate', cfg.base_lr, summary = True)
         
-        return tf.train.MomentumOptimizer(learning_rate = lr, momentum = cfg.momentum)
+        return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
 
 
 def get_data(train_or_test, batch_size):
     is_train = train_or_test == 'train'
 
-    ds = Data(train_or_test, True)
+    ds = Data(train_or_test, True, debug=True)
 
     if is_train:
         augmentors = [
@@ -187,9 +178,9 @@ def get_config(args):
         dataflow = dataset_train,
         callbacks = [
             ModelSaver(),
-            PeriodicTrigger(InferenceRunner(dataset_val, [
-                ScalarStats('cost')]), every_k_epochs = 3),
-            # HumanHyperParamSetter('learning_rate'),
+            # PeriodicTrigger(InferenceRunner(dataset_val, [
+            #     ScalarStats('cost')]), every_k_epochs = 3),
+            HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
         # steps_per_epoch = 200,
@@ -201,24 +192,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.', default='1')
     parser.add_argument('--load', help='load model')
-    parser.add_argument('--batch_size', help='load model', default = 64)
-    parser.add_argument('--log_dir', help="directory of logging", default=None)
+    parser.add_argument('--batch_size', help='load model', default=8)
+    parser.add_argument('--logdir', help="directory of logging", default=None)
     args = parser.parse_args()
-    if args.log_dir != None:
-        logger.set_logger_dir(str(Path('train_log')/args.log_dir))
+    if args.logdir != None:
+        logger.set_logger_dir(str(Path('train_log')/args.logdir))
     else:
         logger.auto_set_dir()
 
     config = get_config(args)
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-        NR_GPU = len(args.gpu.split(','))
-        config.nr_tower = NR_GPU
+        config.nr_tower = get_nr_gpu()
     if args.load:
-        config.session_init = _get_model_loader(args.load)
+        config.session_init = get_model_loader(args.load)
     
-    if args.load:
-        if args.load.endswith('.npz'):
-            config.session_init = _get_model_loader(args.load)
-    trainer = SyncMultiGPUTrainerParameterServer(max(get_nr_gpu(), 1))
+    trainer = SyncMultiGPUTrainerParameterServer(get_nr_gpu())
     launch_train_with_config(config, trainer)
