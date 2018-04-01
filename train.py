@@ -127,8 +127,7 @@ class Model(ModelDesc):
         
 
     def _get_optimizer(self):
-        lr = get_scalar_var('learning_rate', cfg.base_lr, summary = True)
-        
+        lr = get_scalar_var('learning_rate', cfg.base_lr, summary=True)
         return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
 
 
