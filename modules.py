@@ -19,7 +19,9 @@ def VGGBlock_official(l):
              .Conv2D('conv3_4', 256)
              .MaxPooling('pool3', 2)
              .Conv2D('conv4_1', 512)
-             .Conv2D('conv4_2', 512)())
+             .Conv2D('conv4_2', 512)
+             .Conv2D('conv4_3_cpm', 256)
+             .Conv2D('conv4_4_cpm', 128)())
     
     return l
 

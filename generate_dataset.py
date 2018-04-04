@@ -14,8 +14,7 @@ import random
 from cfgs.config import cfg
 
 def transform_joints(joints):
-    # add nect, adjust order, pay attention to the visibility of neck
-
+    # add neck, adjust order, pay attention to the visibility of neck
     transformed_joints = np.zeros((18, 3))
 
     for idx in range(18):
