@@ -193,23 +193,24 @@ class Data(RNGDataFlow):
         dice = np.random.rand()
         do_flip = dice <= self.params["flip_prob"]
 
-        if do_flip == False:
-            img_aug = cv2.flip(img, 1)
-            mask_aug = cv2.flip(mask, 1)
+        if do_flip == True:
+            return img, mask, label
+        img_aug = cv2.flip(img, 1)
+        mask_aug = cv2.flip(mask, 1)
 
-            label["objpos"][0] = self.params["crop_size_x"] - 1 - label["objpos"][0]
+        label["objpos"][0] = self.params["crop_size_x"] - 1 - label["objpos"][0]
 
-            right_idxes = [2, 3, 4, 8, 9, 10, 14, 16]
-            left_idxes =  [5, 6, 7, 11, 12, 13, 15, 17]
+        right_idxes = [2, 3, 4, 8, 9, 10, 14, 16]
+        left_idxes =  [5, 6, 7, 11, 12, 13, 15, 17]
 
-            # need to exchange left joints with right joints
-            for person in label["persons"]:
-                for idx, joint_idx_1 in enumerate(right_idxes):
-                    joint_idx_2 = left_idxes[joint_idx_2]
-                    # exchange the joint_idx_1-th joint with the joint_idx_2-th joint
-                    person["joint"][[joint_idx_1, joing_idx_2]] = person["joint"][[joint_idx_2, joint_idx_1]]
+        # need to exchange left joints with right joints
+        for person in label["persons"]:
+            for idx, joint_idx_1 in enumerate(right_idxes):
+                joint_idx_2 = left_idxes[idx]
+                # exchange the joint_idx_1-th joint with the joint_idx_2-th joint
+                person["joint"][[joint_idx_1, joint_idx_2]] = person["joint"][[joint_idx_2, joint_idx_1]]
 
-            return img_aug, mask_aug, label
+        return img_aug, mask_aug, label
 
 
     def get_data(self):
@@ -243,7 +244,7 @@ class Data(RNGDataFlow):
             # convert to model input format
             # raw_h, raw_w, _ = img.shape
             # img = cv2.resize(img, (cfg.img_y, cfg.img_x))
-            # mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
+            mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
 
             # create blank heat map
             heat_maps = np.zeros((cfg.grid_y, cfg.grid_x, cfg.ch_heats))
@@ -287,14 +288,14 @@ class Data(RNGDataFlow):
                 limb_to_kp = cfg.limb_to[i]
                 count = np.zeros((cfg.grid_y, cfg.grid_x))
 
-                for person_label in label:
+                for person_label in label["persons"]:
                     # get keypoint coord in the label map
-                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] * cfg.img_x / raw_w / 8,
-                                      y=person_label['joint'][limb_from_kp, 1] * cfg.img_y / raw_h / 8)
+                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] / 8,
+                                      y=person_label['joint'][limb_from_kp, 1] / 8)
                     limb_from_v = person_label['joint'][limb_from_kp, 2]
 
-                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] * cfg.img_x / raw_w / 8,
-                                    y=person_label['joint'][limb_to_kp, 1] * cfg.img_y / raw_h / 8)
+                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] / 8,
+                                    y=person_label['joint'][limb_to_kp, 1] / 8)
                     limb_to_v = person_label['joint'][limb_to_kp, 2]
 
                     if limb_from_v > 1 or limb_to_v > 1:
