@@ -10,7 +10,7 @@ from cfgs.config import cfg
 from utils.session_init import get_model_loader_from_vgg as _get_model_loader
 
 import os
-h, w = cfg.crop_size_y, cfg.crop_size_x
+# h, w = cfg.crop_size_y, cfg.crop_size_x
 
 def apply_mask(t, mask):
     return t * mask
@@ -94,10 +94,10 @@ class Model(ModelDesc):
         batch_size = tf.shape(imgs)[0]
 
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
-            loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
-            # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
-            # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
+            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
+            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
+            loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
+            loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
             loss1_total += loss1
             loss2_total += loss2
             loss_total += (loss1 + loss2)
@@ -138,64 +138,60 @@ def get_data(train_or_test, batch_size):
 
     if is_train:
         augmentors = [
-            # imgaug.RandomCrop(crop_shape=cfg.img_size),
-            # imgaug.RandomOrderAug(
-            #     [imgaug.Brightness(30, clip=False),
-            #      imgaug.Contrast((0.8, 1.2), clip=False),
-            #      imgaug.Saturation(0.4),
-            #      # rgb-bgr conversion
-            #      imgaug.Lighting(0.1,
-            #                      eigval=[0.2175, 0.0188, 0.0045][::-1],
-            #                      eigvec=np.array(
-            #                          [[-0.5675, 0.7192, 0.4009],
-            #                           [-0.5808, -0.0045, -0.8140],
-            #                           [-0.5836, -0.6948, 0.4203]],
-            #                          dtype='float32')[::-1, ::-1]
-            #                      )]),
-            # imgaug.Clip(),
-            # imgaug.Flip(horiz=True),
-            # imgaug.ToUint8()
+            imgaug.RandomOrderAug(
+                [imgaug.Brightness(30, clip=False),
+                 imgaug.Contrast((0.8, 1.2), clip=False),
+                 imgaug.Saturation(0.4),
+                 imgaug.Lighting(0.1,
+                                 eigval=[0.2175, 0.0188, 0.0045][::-1],
+                                 eigvec=np.array(
+                                     [[-0.5675, 0.7192, 0.4009],
+                                      [-0.5808, -0.0045, -0.8140],
+                                      [-0.5836, -0.6948, 0.4203]],
+                                     dtype='float32')[::-1, ::-1]
+                                 )]),
+            imgaug.Clip(),
+            imgaug.ToUint8()
         ]
-    # else:
-        # augmentors = [
-        #     imgaug.RandomCrop(crop_shape=cfg.img_size),
-        #     imgaug.ToUint8()
-        # ]
-    # ds = AugmentImageComponent(ds, augmentors)
+
+    else:
+        augmentors = [
+            imgaug.ToUint8()
+        ]
+    ds = AugmentImageComponent(ds, augmentors)
 
     if is_train:
         ds = PrefetchDataZMQ(ds, min(6, multiprocessing.cpu_count()))
     ds = BatchData(ds, batch_size, remainder = not is_train)
     return ds
 
-
 def get_config(args):
-    dataset_train = get_data('train', int(args.batch_size))
-    dataset_val = get_data('test', int(args.batch_size))
+    ds_train = get_data('train', args.batch_size_per_gpu)
+    ds_val = get_data('test', args.batch_size_per_gpu)
 
     return TrainConfig(
-        dataflow = dataset_train,
+        dataflow = ds_train,
         callbacks = [
             ModelSaver(),
-            # PeriodicTrigger(InferenceRunner(dataset_val, [
-            #     ScalarStats('cost')]), every_k_epochs = 3),
+            PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
+                            every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
-        # steps_per_epoch = 200,
+        steps_per_epoch = ds_train.size() // (args.batch_size_per_gpu * get_nr_gpu()),
     )
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.', default='1')
+    parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.', default='0,1')
     parser.add_argument('--load', help='load model')
-    parser.add_argument('--batch_size', help='load model', default=8)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=16)
     parser.add_argument('--logdir', help="directory of logging", default=None)
     args = parser.parse_args()
     if args.logdir != None:
-        logger.set_logger_dir(str(Path('train_log')/args.logdir))
+        logger.set_logger_dir(os.path.join("train_log", args.logdir))
     else:
         logger.auto_set_dir()
 

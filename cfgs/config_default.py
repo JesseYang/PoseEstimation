@@ -65,19 +65,18 @@ _.stages = 6
 # ============================================================
 _ = cfg
 # 模型先经过VGG-19的前10层, 有3次MaxPooling, 所以在预处理阶段要将groundtruth缩小8倍
-cfg.stride = 8
+# cfg.stride = 8
 # 由KeyPoints生成HeatMap时, Peak的扩散系数
-cfg.gen_heatmap_th = 1
+# cfg.gen_heatmap_th = 1
 # 由KeyPoints生成PAF时, limb的宽度
-cfg.gen_paf_th = 40
+# cfg.gen_paf_th = 40
 
-cfg.crop_size_x = 368
-cfg.crop_size_y = 368
+# cfg.crop_size_x = 368
+# cfg.crop_size_y = 368
 
 cfg.base_lr = 4e-7
 cfg.momentum = 0.9
-# cfg.weight_decay = 5e-4
-cfg.weight_decay = 0.0
+cfg.weight_decay = 5e-4
 # ============================================================
 #                       后处理
 # ============================================================
