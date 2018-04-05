@@ -2,7 +2,7 @@ from pathlib import Path
 import pickle
 import os
 import sys
-sys.path.insert(1, '../coco/PythonAPI/')
+sys.path.insert(1, '../coco/cocoapi/PythonAPI/')
 from pycocotools.coco import COCO
 
 from tensorpack import *
@@ -55,7 +55,6 @@ class Data(RNGDataFlow):
 
         if debug == True:
             self.img_id_list = self.img_id_list[:8]
-
 
     def size(self):
         return len(self.img_id_list)
@@ -203,8 +202,12 @@ class Data(RNGDataFlow):
         right_idxes = [2, 3, 4, 8, 9, 10, 14, 16]
         left_idxes =  [5, 6, 7, 11, 12, 13, 15, 17]
 
+        _, w, _ = img_aug.shape
+
         # need to exchange left joints with right joints
         for person in label["persons"]:
+            for joint_idx in range(cfg.ch_heats - 1):
+                person["joint"][joint_idx, 0] = w - 1 - person["joint"][joint_idx, 0]
             for idx, joint_idx_1 in enumerate(right_idxes):
                 joint_idx_2 = left_idxes[idx]
                 # exchange the joint_idx_1-th joint with the joint_idx_2-th joint
@@ -241,9 +244,8 @@ class Data(RNGDataFlow):
             img, mask, label = self.augmentation_crop(img, mask, label)
             img, mask, label = self.augmentation_flip(img, mask, label)
 
-            # convert to model input format
-            # raw_h, raw_w, _ = img.shape
-            # img = cv2.resize(img, (cfg.img_y, cfg.img_x))
+            raw_h, raw_w, _ = img.shape
+            img = cv2.resize(img, (cfg.img_y, cfg.img_x))
             mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
 
             # create blank heat map
@@ -259,8 +261,8 @@ class Data(RNGDataFlow):
                     if person_label['joint'][i, 2] > 1: # cropped or unlabeled
                         continue
 
-                    x_center = person_label['joint'][i, 0]
-                    y_center = person_label['joint'][i, 1]
+                    x_center = person_label['joint'][i, 0] * cfg.img_x / raw_w
+                    y_center = person_label['joint'][i, 1] * cfg.img_y / raw_h
                     for g_y in range(cfg.grid_y):
                         for g_x in range(cfg.grid_x):
                             x = start + g_x * cfg.stride
@@ -290,12 +292,12 @@ class Data(RNGDataFlow):
 
                 for person_label in label["persons"]:
                     # get keypoint coord in the label map
-                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] / 8,
-                                      y=person_label['joint'][limb_from_kp, 1] / 8)
+                    limb_from = Point(x=person_label['joint'][limb_from_kp, 0] * cfg.img_x / raw_w / 8,
+                                      y=person_label['joint'][limb_from_kp, 1] * cfg.img_y / raw_h / 8)
                     limb_from_v = person_label['joint'][limb_from_kp, 2]
 
-                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] / 8,
-                                    y=person_label['joint'][limb_to_kp, 1] / 8)
+                    limb_to = Point(x=person_label['joint'][limb_to_kp, 0] * cfg.img_x / raw_w / 8,
+                                    y=person_label['joint'][limb_to_kp, 1] * cfg.img_y / raw_h / 8)
                     limb_to_v = person_label['joint'][limb_to_kp, 2]
 
                     if limb_from_v > 1 or limb_to_v > 1:

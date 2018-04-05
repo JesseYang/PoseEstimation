@@ -1,8 +1,7 @@
 import os
 import cv2
 import sys
-sys.path.insert(1, '../data/coco/PythonAPI/')
-sys.path.insert(1, '../multi/')
+sys.path.insert(1, '../coco/cocoapi/PythonAPI/')
 from scipy.spatial.distance import cdist
 import numpy as np
 import pickle
@@ -36,6 +35,9 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
     coco = COCO(ann_path)
     for img_id in tqdm(coco.imgs.keys(), ascii=True):
 
+        if img_id != 349527:
+            continue
+
         ann_ids = coco.getAnnIds(imgIds = img_id)
         img_dict = coco.imgs[img_id]
         img_anns = coco.loadAnns(ann_ids)
@@ -54,17 +56,18 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
                              img_anns[p]["bbox"][1] + img_anns[p]["bbox"][3] / 2]
     
             # skip this person if the distance to existing person is too small
-            flag = 0
-            for pc in prev_center:
-                a = np.expand_dims(pc[:2], axis=0)
-                b = np.expand_dims(person_center, axis=0)
-                dist = cdist(a, b)[0]
-                if dist < pc[2] * 0.3:
-                    flag = 1
-                    continue
+            if cfg.skip_adj == True:
+                flag = 0
+                for pc in prev_center:
+                    a = np.expand_dims(pc[:2], axis=0)
+                    b = np.expand_dims(person_center, axis=0)
+                    dist = cdist(a, b)[0]
+                    if dist < pc[2] * 0.3:
+                        flag = 1
+                        continue
     
-            if flag == 1:
-                continue
+                if flag == 1:
+                    continue
     
             pers["objpos"] = person_center
             pers["bbox"] = img_anns[p]["bbox"]
@@ -93,7 +96,7 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
     
             pers["joint"] = transform_joints(joints)
     
-            pers["scale_provided"] = img_anns[p]["bbox"][3] / 368
+            pers["scale_provided"] = img_anns[p]["bbox"][3] / cfg.img_y
     
             persons.append(pers)
             prev_center.append(np.append(person_center, max(img_anns[p]["bbox"][2], img_anns[p]["bbox"][3])))
@@ -124,7 +127,7 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
                 if p["num_keypoints"] <= 0:
                     mask_miss = np.bitwise_or(mask, mask_miss)
         
-            if flag<1:
+            if flag < 1:
                 mask_miss = np.logical_not(mask_miss)
             elif flag == 1:
                 mask_miss = np.logical_not(np.bitwise_or(mask_miss, mask_crowd))

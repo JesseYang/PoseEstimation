@@ -20,6 +20,9 @@ _.val_labels_dir = 'coco/val2017_labels'
 _.img_y = 368
 _.img_x = 368
 
+# whether skip a person if the distance to existing person is too small
+_.skip_adj = True
+
 
 # the default oder in coco annotation is:
 # 0:nose          1:left_eye         2:right_eye         3:left_ear
