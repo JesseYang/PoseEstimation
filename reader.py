@@ -244,6 +244,7 @@ class Data(RNGDataFlow):
             img, mask, label = self.augmentation_crop(img, mask, label)
             img, mask, label = self.augmentation_flip(img, mask, label)
 
+            img = img.astype(np.uint8)
             raw_h, raw_w, _ = img.shape
             img = cv2.resize(img, (cfg.img_y, cfg.img_x))
             mask = cv2.resize(mask, (cfg.grid_y, cfg.grid_x)) / 255
@@ -348,7 +349,7 @@ class Data(RNGDataFlow):
 
 
 if __name__ == '__main__':
-    ds = Data('train', False)
+    ds = Data('train', True)
     
     g = ds.get_data()
     sample = next(g)

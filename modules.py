@@ -3,7 +3,7 @@ from tensorpack import *
 
 from cfgs.config import cfg
 
-@layer_register(log_shape=True)
+# @layer_register(log_shape=True)
 def VGGBlock_official(l):
     with argscope(Conv2D, kernel_shape=3, nl=tf.nn.relu):
         l = (LinearWrap(l)

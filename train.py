@@ -1,16 +1,17 @@
+import os
+import multiprocessing
 import tensorflow as tf
+
 from tensorpack import *
-from pathlib import Path
-from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
-from reader import Data
 from tensorpack.tfutils.summary import *
 from tensorpack.tfutils.symbolic_functions import *
-import multiprocessing
-from cfgs.config import cfg
-from utils.session_init import get_model_loader_from_vgg as _get_model_loader
+from tensorpack.utils.gpu import get_nr_gpu
 
-import os
-# h, w = cfg.crop_size_y, cfg.crop_size_x
+from cfgs.config import cfg
+from modules import VGGBlock_official as VGGBlock, Stage1Block, StageTBlock
+from reader import Data
+
+
 
 def apply_mask(t, mask):
     return t * mask
@@ -55,7 +56,7 @@ class Model(ModelDesc):
         heatmap_outputs, paf_outputs = [], []
         vgg_output = VGGBlock(imgs)
 
-        vgg_output = tf.stop_gradient(vgg_output)
+        # vgg_output = tf.stop_gradient(vgg_output)
 
         vgg_output = tf.identity(vgg_output, name='vgg_features')
 
@@ -134,7 +135,8 @@ class Model(ModelDesc):
 def get_data(train_or_test, batch_size):
     is_train = train_or_test == 'train'
 
-    ds = Data(train_or_test, True, debug=True)
+    ds = Data(train_or_test, True)
+    sample_num = ds.size()
 
     if is_train:
         augmentors = [
@@ -161,13 +163,13 @@ def get_data(train_or_test, batch_size):
     ds = AugmentImageComponent(ds, augmentors)
 
     if is_train:
-        ds = PrefetchDataZMQ(ds, min(6, multiprocessing.cpu_count()))
+        ds = PrefetchDataZMQ(ds, min(8, multiprocessing.cpu_count()))
     ds = BatchData(ds, batch_size, remainder = not is_train)
-    return ds
+    return ds, sample_num
 
 def get_config(args):
-    ds_train = get_data('train', args.batch_size_per_gpu)
-    ds_val = get_data('test', args.batch_size_per_gpu)
+    ds_train, sample_num = get_data('train', args.batch_size_per_gpu)
+    ds_val, _ = get_data('test', args.batch_size_per_gpu)
 
     return TrainConfig(
         dataflow = ds_train,
@@ -178,7 +180,7 @@ def get_config(args):
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
-        steps_per_epoch = ds_train.size() // (args.batch_size_per_gpu * get_nr_gpu()),
+        steps_per_epoch = sample_num // (args.batch_size_per_gpu * get_nr_gpu()),
     )
 
 
@@ -198,7 +200,7 @@ if __name__ == '__main__':
     config = get_config(args)
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-        config.nr_tower = get_nr_gpu()
+        # config.nr_tower = get_nr_gpu()
     if args.load:
         config.session_init = get_model_loader(args.load)
     
