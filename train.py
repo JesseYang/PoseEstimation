@@ -6,9 +6,10 @@ from tensorpack import *
 from tensorpack.tfutils.summary import *
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.utils.gpu import get_nr_gpu
+from tensorpack.tfutils import optimizer, gradproc
 
 from cfgs.config import cfg
-from modules import VGGBlock_official as VGGBlock, Stage1Block, StageTBlock
+from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
 from reader import Data
 
 
@@ -57,12 +58,11 @@ class Model(ModelDesc):
         vgg_output = VGGBlock(imgs)
 
         # vgg_output = tf.stop_gradient(vgg_output)
-
         vgg_output = tf.identity(vgg_output, name='vgg_features')
 
         # Stage 1
         branch1, branch2 = Stage1Block('stage_1', vgg_output, 1), Stage1Block('stage_1', vgg_output, 2)
-        l = tf.concat([branch1, branch2, vgg_output], axis = -1)
+        l = tf.concat([branch1, branch2, vgg_output], axis=-1)
 
         if self.apply_mask:
             w1 = apply_mask(branch1, mask)
@@ -76,7 +76,7 @@ class Model(ModelDesc):
         # Stage T
         for i in range(2, cfg.stages + 1):
             branch1, branch2 = StageTBlock('stage_{}'.format(i), l, 1), StageTBlock('stage_{}'.format(i), l, 2)
-            l = tf.concat([branch1, branch2, vgg_output], axis = -1)
+            l = tf.concat([branch1, branch2, vgg_output], axis=-1)
             
             if self.apply_mask:
                 w1 = apply_mask(branch1, mask)
@@ -95,10 +95,10 @@ class Model(ModelDesc):
         batch_size = tf.shape(imgs)[0]
 
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
-            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
-            loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
-            loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
+            loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
+            loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
+            # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
+            # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
             loss1_total += loss1
             loss2_total += loss2
             loss_total += (loss1 + loss2)
@@ -111,25 +111,31 @@ class Model(ModelDesc):
 
 
         # ========================== Summary & Outputs ==========================
-        tf.summary.image(name = 'Image', tensor = imgs, max_outputs=3)
-        tf.summary.image(name = 'Mask', tensor = mask, max_outputs=3)
-        output1 = tf.identity(heatmap_outputs[-1],  name = 'HeatMaps')
-        output2 = tf.identity(paf_outputs[-1], name = 'PAFs')
+        tf.summary.image(name='image', tensor=imgs, max_outputs=3)
+        tf.summary.image(name='mask', tensor=mask, max_outputs=3)
+        output1 = tf.identity(heatmap_outputs[-1],  name = 'heatmaps')
+        output2 = tf.identity(paf_outputs[-1], name = 'pafs')
 
 
         add_moving_summary(self.cost)
-        add_moving_summary(tf.identity(loss1_total, name = 'HeatMapLoss'))
-        add_moving_summary(tf.identity(loss2_total, name = 'PAFLoss'))
+        add_moving_summary(tf.identity(loss1_total, name = 'heatmap_loss'))
+        add_moving_summary(tf.identity(loss2_total, name = 'paf_loss'))
 
         ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
         xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-        tf.summary.image(name = 'GT_HeatMap', tensor = ht, max_outputs=3)
-        tf.summary.image(name = 'HeatMap', tensor = xht, max_outputs=3)
+        tf.summary.image(name = 'gt_heatmap', tensor = ht, max_outputs=3)
+        tf.summary.image(name = 'heatmap', tensor = xht, max_outputs=3)
         
 
     def _get_optimizer(self):
         lr = get_scalar_var('learning_rate', cfg.base_lr, summary=True)
-        return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
+        if cfg.backbone_grad_scale != 1.0:
+            opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
+            gradprocs = [gradproc.ScaleGradient(
+                         [('conv[1-4]_[1-4]\/.*', cfg.backbone_grad_scale)])]
+            return optimizer.apply_grad_processors(opt, gradprocs)
+        else:
+            return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
 
 
 def get_data(train_or_test, batch_size):
@@ -175,8 +181,8 @@ def get_config(args):
         dataflow = ds_train,
         callbacks = [
             ModelSaver(),
-            PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
-                            every_k_epochs=3),
+            # PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
+            #                 every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
@@ -197,10 +203,10 @@ if __name__ == '__main__':
     else:
         logger.auto_set_dir()
 
-    config = get_config(args)
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
         # config.nr_tower = get_nr_gpu()
+    config = get_config(args)
     if args.load:
         config.session_init = get_model_loader(args.load)
     

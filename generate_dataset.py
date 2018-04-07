@@ -35,9 +35,6 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
     coco = COCO(ann_path)
     for img_id in tqdm(coco.imgs.keys(), ascii=True):
 
-        if img_id != 349527:
-            continue
-
         ann_ids = coco.getAnnIds(imgIds = img_id)
         img_dict = coco.imgs[img_id]
         img_anns = coco.loadAnns(ann_ids)

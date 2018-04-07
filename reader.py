@@ -25,7 +25,7 @@ class Point(object):
         return np.sqrt(self.x * self.x + self.y * self.y)
 
 class Data(RNGDataFlow):
-    def __init__(self, train_or_test, shuffle, debug=False):
+    def __init__(self, train_or_test, shuffle):
         super(Data, self).__init__()
 
         assert train_or_test in ['train', 'test']
@@ -53,8 +53,8 @@ class Data(RNGDataFlow):
 
         self.shuffle = shuffle
 
-        if debug == True:
-            self.img_id_list = self.img_id_list[:8]
+        if cfg.debug == True:
+            self.img_id_list = self.img_id_list[:cfg.debug_sample_num]
 
     def size(self):
         return len(self.img_id_list)
@@ -146,17 +146,21 @@ class Data(RNGDataFlow):
         x_offset = (dice_x - 0.5) * 2 * self.params["center_perterb_max"]
         y_offset = (dice_y - 0.5) * 2 * self.params["center_perterb_max"]
 
-        center = [label["objpos"][0] + x_offset, label["objpos"][1] + y_offset]
+        height, width, _ = img.shape
 
-        start_x = int(center[0] - self.params["crop_size_x"] * 0.5)
-        start_y = int(center[1] - self.params["crop_size_y"] * 0.5)
+        center_x = min(max(label["objpos"][0] + x_offset, 0), width - 1)
+        center_y = min(max(label["objpos"][1] + y_offset, 0), height - 1)
+
+        x_offset = center_x - label["objpos"][0]
+        y_offset = center_y - label["objpos"][1]
+
+        start_x = int(center_x - self.params["crop_size_x"] * 0.5)
+        start_y = int(center_y - self.params["crop_size_y"] * 0.5)
         end_x = start_x + self.params["crop_size_x"]
         end_y = start_y + self.params["crop_size_y"]
 
         img_aug = np.ones((self.params["crop_size_y"], self.params["crop_size_x"], 3)) * 128
         mask_aug = np.ones((self.params["crop_size_y"], self.params["crop_size_x"])) * 255
-
-        height, width, _ = img.shape
 
         crop_start_x = max(start_x, 0)
         crop_end_x = min(end_x, width)
@@ -239,10 +243,11 @@ class Data(RNGDataFlow):
                 "objpos": persons[0]["objpos"]
             }
 
-            img, mask, label = self.augmentation_scale(img, mask, label)
-            img, mask, label = self.augmentation_rotate(img, mask, label)
-            img, mask, label = self.augmentation_crop(img, mask, label)
-            img, mask, label = self.augmentation_flip(img, mask, label)
+            if cfg.augmentation:
+                img, mask, label = self.augmentation_scale(img, mask, label)
+                img, mask, label = self.augmentation_rotate(img, mask, label)
+                img, mask, label = self.augmentation_crop(img, mask, label)
+                img, mask, label = self.augmentation_flip(img, mask, label)
 
             img = img.astype(np.uint8)
             raw_h, raw_w, _ = img.shape

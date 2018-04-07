@@ -60,8 +60,8 @@ def Stage1Block(l, branch):
                  .Conv2D('conv2', 128, 3)
                  .Conv2D('conv3', 128, 3)
                  .Conv2D('conv4', 512, 1)
-                 .Conv2D('conv5', ch_out, 1)())
-                 # .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
+                 # .Conv2D('conv5', ch_out, 1)())
+                 .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
 
     return l
 
@@ -81,7 +81,7 @@ def StageTBlock(l, branch):
                  .Conv2D('conv4', 128, 7)
                  .Conv2D('conv5', 128, 7)
                  .Conv2D('conv6', 128, 1)
-                 .Conv2D('conv7', ch_out, 1)())
-                 # .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
+                 # .Conv2D('conv7', ch_out, 1)())
+                 .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
 
     return l
