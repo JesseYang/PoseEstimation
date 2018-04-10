@@ -41,10 +41,10 @@ class Model(ModelDesc):
 
     def _get_inputs(self):
         return [
-            InputDesc(tf.float32, (None, cfg.img_y, cfg.img_x, 3), 'imgs'),
-            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, cfg.ch_heats), 'gt_heatmaps'),
-            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, cfg.ch_vectors), 'gt_pafs'),
-            InputDesc(tf.float32, (None, cfg.grid_y, cfg.grid_x, 1), 'mask')
+            InputDesc(tf.float32, (None, None, None, 3), 'imgs'),
+            InputDesc(tf.float32, (None, None, None, cfg.ch_heats), 'gt_heatmaps'),
+            InputDesc(tf.float32, (None, None, None, cfg.ch_vectors), 'gt_pafs'),
+            InputDesc(tf.float32, (None, None, None, 1), 'mask')
         ]
 
     def _build_graph(self, inputs):
