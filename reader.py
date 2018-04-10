@@ -53,7 +53,7 @@ class Data(RNGDataFlow):
 
         self.shuffle = shuffle
 
-        if cfg.debug == True:
+        if cfg.debug == True and cfg.debug_sample_num <= len(self.img_id_list):
             self.img_id_list = self.img_id_list[:cfg.debug_sample_num]
 
     def size(self):

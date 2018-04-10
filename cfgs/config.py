@@ -1,1 +1,1 @@
-from .config_default import cfg
+from .config_normal import cfg

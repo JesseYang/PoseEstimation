@@ -121,10 +121,16 @@ class Model(ModelDesc):
         add_moving_summary(tf.identity(loss1_total, name = 'heatmap_loss'))
         add_moving_summary(tf.identity(loss2_total, name = 'paf_loss'))
 
-        ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
-        xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-        tf.summary.image(name = 'gt_heatmap', tensor = ht, max_outputs=3)
-        tf.summary.image(name = 'heatmap', tensor = xht, max_outputs=3)
+        # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
+        # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
+        # tf.summary.image(name = 'gt_heatmap', tensor = ht, max_outputs=3)
+        # tf.summary.image(name = 'heatmap', tensor = xht, max_outputs=3)
+        gt_joint_heatmaps = tf.split(gt_heatmaps, [18, 1], axis=3)[0]
+        gt_heatmap_shown = tf.reduce_max(gt_joint_heatmaps, axis=3, keep_dims=True)
+        joint_heatmaps = tf.split(heatmap_outputs[-1], [18, 1], axis=3)[0]
+        heatmap_shown = tf.reduce_max(joint_heatmaps, axis=3, keep_dims=True)
+        tf.summary.image(name='gt_heatmap', tensor=gt_heatmap_shown, max_outputs=3)
+        tf.summary.image(name='heatmap', tensor=heatmap_shown, max_outputs=3)
         
 
     def _get_optimizer(self):
@@ -181,8 +187,8 @@ def get_config(args):
         dataflow = ds_train,
         callbacks = [
             ModelSaver(),
-            # PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
-            #                 every_k_epochs=3),
+            PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
+                            every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
