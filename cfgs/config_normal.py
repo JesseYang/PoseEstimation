@@ -53,6 +53,12 @@ _.to_body_part =   [0, 6, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3]
 _.limb_from = [1, 8,  9,  1, 11, 12, 1, 2, 3,  2, 1, 5, 6,  5, 1,  0,  0, 14, 15]
 _.limb_to =   [8, 9, 10, 11, 12, 13, 2, 3, 4, 16, 5, 6, 7, 17, 0, 14, 15, 16, 17]
 
+_.limb_seq = []
+_.map_idx = []
+for idx in range(len(_.limb_from)):
+    _.limb_seq.append([_.limb_from[idx], _.limb_to[idx]])
+    _.map_idx.append([2 * idx, 2 * idx + 1])
+
 _.stride = 8
 
 _.sigma = 7
@@ -61,6 +67,7 @@ _.grid_y = int(_.img_y / _.stride)
 _.grid_x = int(_.img_x / _.stride)
 
 _.thre1 = 0.1
+_.thre2 = 0.05
 
 _.ch_heats = 18 + 1 # 18个parts 第19个(遍历不会执行到)表示是非人体区域
 _.ch_vectors = 38

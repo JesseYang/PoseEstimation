@@ -219,7 +219,6 @@ class Data(RNGDataFlow):
 
         return img_aug, mask_aug, label
 
-
     def get_data(self):
         if self.shuffle:
             self.rng.shuffle(self.img_id_list)
