@@ -12,12 +12,10 @@ from cfgs.config import cfg
 from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
 from reader import Data
 
-
-
 def apply_mask(t, mask):
     return t * mask
 
-def image_preprocess(image, bgr = True):
+def image_preprocess(image, bgr=True):
     with tf.name_scope('image_preprocess'):
         if image.dtype.base_dtype != tf.float32:
             image = tf.cast(image, tf.float32)
@@ -89,24 +87,23 @@ class Model(ModelDesc):
 
 
         # ========================== Cost Functions ==========================
-        loss_total = 0
-        loss1_total = 0
-        loss2_total = 0
+        loss1_list = []
+        loss2_list = []
         batch_size = tf.shape(imgs)[0]
 
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
-            loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
-            # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
-            # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
-            loss1_total += loss1
-            loss2_total += loss2
-            loss_total += (loss1 + loss2)
+            loss1 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
+            loss2 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
+            loss1_list.append(loss1)
+            loss2_list.append(loss2)
 
         if cfg.weight_decay > 0:
             wd_cost = regularize_cost('.*/W', l2_regularizer(cfg.weight_decay), name='l2_regularize_loss')
         else:
             wd_cost = tf.constant(0.0)
+        loss1_total = tf.add_n(loss1_list)
+        loss2_total = tf.add_n(loss2_list)
+        loss_total = loss1_total + loss2_total
         self.cost = tf.add_n([loss_total, wd_cost], name='cost')
 
 
@@ -116,15 +113,14 @@ class Model(ModelDesc):
         output1 = tf.identity(heatmap_outputs[-1],  name = 'heatmaps')
         output2 = tf.identity(paf_outputs[-1], name = 'pafs')
 
-
         add_moving_summary(self.cost)
-        add_moving_summary(tf.identity(loss1_total, name = 'heatmap_loss'))
-        add_moving_summary(tf.identity(loss2_total, name = 'paf_loss'))
+        for idx, loss1 in enumerate(loss1_list):
+            add_moving_summary(tf.identity(loss1_list[idx], name='stage%d_L1_loss' % (idx+1)))
+        for idx, loss2 in enumerate(loss2_list):
+            add_moving_summary(tf.identity(loss2_list[idx], name='stage%d_L2_loss' % (idx+1)))
+        add_moving_summary(tf.identity(loss1_total, name = 'L1_loss'))
+        add_moving_summary(tf.identity(loss2_total, name = 'L2_loss'))
 
-        # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
-        # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-        # tf.summary.image(name = 'gt_heatmap', tensor = ht, max_outputs=3)
-        # tf.summary.image(name = 'heatmap', tensor = xht, max_outputs=3)
         gt_joint_heatmaps = tf.split(gt_heatmaps, [18, 1], axis=3)[0]
         gt_heatmap_shown = tf.reduce_max(gt_joint_heatmaps, axis=3, keep_dims=True)
         joint_heatmaps = tf.split(heatmap_outputs[-1], [18, 1], axis=3)[0]
@@ -187,8 +183,8 @@ def get_config(args):
         dataflow = ds_train,
         callbacks = [
             ModelSaver(),
-            PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
-                            every_k_epochs=3),
+            # PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
+            #                 every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),

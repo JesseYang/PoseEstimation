@@ -357,8 +357,3 @@ if __name__ == '__main__':
     
     g = ds.get_data()
     sample = next(g)
-    '''
-    for i in g:
-        img, heatmaps, pafs, mask_all = i
-        print(mask_all.shape)
-    '''

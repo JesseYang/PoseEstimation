@@ -41,7 +41,8 @@ def predict(args):
                                    output_names = ['heatmaps', 'pafs'])
     predict_func = OfflinePredictor(predict_config)
 
-    img = cv2.imread(args.input_path)
+    img_bgr = cv2.imread(args.input_path)
+    img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
     h, w, _ = img.shape
 
@@ -74,7 +75,7 @@ def predict(args):
 
     raw_heatmap_shown = np.maximum(0, heatmap_avg[:, :, 0:1] * 255)
     heatmap_shown = cv2.applyColorMap(raw_heatmap_shown.astype(np.uint8), cv2.COLORMAP_JET)
-    img_with_heatmap = cv2.addWeighted(heatmap_shown, 0.5, img, 0.5, 0)
+    img_with_heatmap = cv2.addWeighted(heatmap_shown, 0.5, img_bgr, 0.5, 0)
 
     cv2.imwrite('heatmap_shown.jpg', img_with_heatmap)
 
