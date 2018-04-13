@@ -138,7 +138,7 @@ def predict(args):
                 for j in range(num_b):
                     # vec is the unit vector from cand_a to cand_b
                     vec = np.subtract(cand_b[j][:2], cand_a[i][:2])
-                    norm = math.sqrt(vec[0]*vec[0] + vec[1]*vec[1])
+                    norm = max(math.sqrt(vec[0]*vec[0] + vec[1]*vec[1]), 1e-5)
                     vec = np.divide(vec, norm)
                     
                     startend = list(zip(np.linspace(cand_a[i][0], cand_b[j][0], num=mid_num), \
@@ -298,8 +298,8 @@ if __name__ == '__main__':
 
     # img_id = 196283
     # img_id = 163640
-    img_id = 785
-    img_path = os.path.join('coco/val2017', '%012d.jpg' % img_id)
+    img_id = 262148
+    img_path = os.path.join('coco/train2017', '%012d.jpg' % img_id)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', help='path of model', required = True)
