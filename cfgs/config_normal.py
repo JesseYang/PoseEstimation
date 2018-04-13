@@ -66,6 +66,7 @@ _.sigma = 7
 _.grid_y = int(_.img_y / _.stride)
 _.grid_x = int(_.img_x / _.stride)
 
+_.thre = 1
 _.thre1 = 0.1
 _.thre2 = 0.05
 

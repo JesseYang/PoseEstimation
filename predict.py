@@ -261,10 +261,9 @@ def predict(args):
         import pdb
         pdb.set_trace()
         '''
-    
+ 
     to_plot = cv2.addWeighted(img, 0.3, canvas, 0.7, 0)
     cv2.imwrite('part.jpg', to_plot)
-
 
     # visualize 2
     stickwidth = 4
@@ -295,11 +294,11 @@ def predict(args):
 
     cv2.imwrite('final.jpg', canvas)
 
-
 if __name__ == '__main__':
 
     # img_id = 196283
-    img_id = 163640
+    # img_id = 163640
+    img_id = 785
     img_path = os.path.join('coco/val2017', '%012d.jpg' % img_id)
 
     parser = argparse.ArgumentParser()
