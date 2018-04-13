@@ -9,7 +9,7 @@ from tensorpack.utils.gpu import get_nr_gpu
 from tensorpack.tfutils import optimizer, gradproc
 
 from cfgs.config import cfg
-from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
+from modules import VGGBlock_official as VGGBlock, Stage1Block, StageTBlock
 from reader import Data
 
 def apply_mask(t, mask):
@@ -26,7 +26,8 @@ def image_preprocess(image, bgr=True):
         if bgr == False:
             mean = mean[::-1]
         image_mean = tf.constant(mean, dtype=tf.float32)
-        image = image - image_mean
+        image = (image - image_mean) / (255 / 2)
+        # image = image - image_mean
         return image
 
 class Model(ModelDesc):
@@ -101,7 +102,7 @@ class Model(ModelDesc):
             wd_cost = tf.constant(0.0)
         loss1_total = tf.add_n(loss1_list)
         loss2_total = tf.add_n(loss2_list)
-        loss_total = loss1 + loss2
+        loss_total = loss1_total + loss2_total
         self.cost = tf.add_n([loss_total, wd_cost], name='cost')
 
 
@@ -113,9 +114,9 @@ class Model(ModelDesc):
 
         add_moving_summary(self.cost)
         for idx, loss1 in enumerate(loss1_list):
-            add_moving_summary(tf.identity(loss1_list[idx], name='stage%d_L1_loss' % idx))
+            add_moving_summary(tf.identity(loss1_list[idx], name='stage%d_L1_loss' % (idx+1)))
         for idx, loss2 in enumerate(loss2_list):
-            add_moving_summary(tf.identity(loss2_list[idx], name='stage%d_L2_loss' % idx))
+            add_moving_summary(tf.identity(loss2_list[idx], name='stage%d_L2_loss' % (idx+1)))
         add_moving_summary(tf.identity(loss1_total, name = 'L1_loss'))
         add_moving_summary(tf.identity(loss2_total, name = 'L2_loss'))
 
@@ -181,8 +182,8 @@ def get_config(args):
         dataflow = ds_train,
         callbacks = [
             ModelSaver(),
-            PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
-                            every_k_epochs=3),
+            # PeriodicTrigger(InferenceRunner(ds_val, [ScalarStats('cost')]),
+            #                 every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
         model = Model(),
