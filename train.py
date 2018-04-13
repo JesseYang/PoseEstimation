@@ -87,16 +87,11 @@ class Model(ModelDesc):
         # ========================== Cost Functions ==========================
         loss1_list = []
         loss2_list = []
-        loss_total = 0
-        loss1_total = 0
-        loss2_total = 0
         batch_size = tf.shape(imgs)[0]
 
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
-            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
-            loss1 = tf.nn.l2_loss((gt_pafs - pafs)) / (2 * tf.cast(batch_size, tf.float32))
-            loss2 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / (2 * tf.cast(batch_size, tf.float32))
+            loss1 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
+            loss2 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
             loss1_list.append(loss1)
             loss2_list.append(loss2)
 
