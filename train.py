@@ -12,25 +12,21 @@ from cfgs.config import cfg
 from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
 from reader import Data
 
-
-
 def apply_mask(t, mask):
     return t * mask
 
-def image_preprocess(image, bgr = True):
+def image_preprocess(image, bgr=True):
     with tf.name_scope('image_preprocess'):
         if image.dtype.base_dtype != tf.float32:
             image = tf.cast(image, tf.float32)
-        image = image * (1.0 / 255)
 
-        mean = [0.485, 0.456, 0.406]    # rgb
-        std = [0.229, 0.224, 0.225]
-        if bgr:
+        # https://github.com/ppwwyyxx/tensorpack/blob/fb5a99e0538be1f4aecfd19438224753e51bdbba/examples/CaffeModels/load-vgg19.py#L65
+        mean = [103.939, 116.779, 123.68]
+
+        if bgr == False:
             mean = mean[::-1]
-            std = std[::-1]
         image_mean = tf.constant(mean, dtype=tf.float32)
-        image_std = tf.constant(std, dtype=tf.float32)
-        image = (image - image_mean) / image_std
+        image = image - image_mean
         return image
 
 class Model(ModelDesc):
@@ -51,7 +47,7 @@ class Model(ModelDesc):
         imgs, gt_heatmaps, gt_pafs, mask = inputs#, mask_heatmaps, mask_pafs = inputs
     
         # ========================== Preprocess ==========================
-        imgs = image_preprocess(imgs, bgr=True)
+        imgs = image_preprocess(imgs, bgr=False)
 
         # ========================== Forward ==========================
         heatmap_outputs, paf_outputs = [], []
@@ -89,24 +85,28 @@ class Model(ModelDesc):
 
 
         # ========================== Cost Functions ==========================
+        loss1_list = []
+        loss2_list = []
         loss_total = 0
         loss1_total = 0
         loss2_total = 0
         batch_size = tf.shape(imgs)[0]
 
         for heatmaps, pafs in zip(heatmap_outputs, paf_outputs):
-            loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
-            loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
-            # loss1 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / tf.cast(batch_size, tf.float32)
-            # loss2 = tf.nn.l2_loss((gt_pafs - pafs)) / tf.cast(batch_size, tf.float32)
-            loss1_total += loss1
-            loss2_total += loss2
-            loss_total += (loss1 + loss2)
+            # loss1 = tf.losses.mean_squared_error(gt_heatmaps, heatmaps) * 46 * 46 * 19
+            # loss2 = tf.losses.mean_squared_error(gt_pafs, pafs) * 46 * 46 * 38
+            loss1 = tf.nn.l2_loss((gt_pafs - pafs)) / (2 * tf.cast(batch_size, tf.float32))
+            loss2 = tf.nn.l2_loss((gt_heatmaps - heatmaps)) / (2 * tf.cast(batch_size, tf.float32))
+            loss1_list.append(loss1)
+            loss2_list.append(loss2)
 
         if cfg.weight_decay > 0:
             wd_cost = regularize_cost('.*/W', l2_regularizer(cfg.weight_decay), name='l2_regularize_loss')
         else:
             wd_cost = tf.constant(0.0)
+        loss1_total = tf.add_n(loss1_list)
+        loss2_total = tf.add_n(loss2_list)
+        loss_total = loss1 + loss2
         self.cost = tf.add_n([loss_total, wd_cost], name='cost')
 
 
@@ -116,15 +116,14 @@ class Model(ModelDesc):
         output1 = tf.identity(heatmap_outputs[-1],  name = 'heatmaps')
         output2 = tf.identity(paf_outputs[-1], name = 'pafs')
 
-
         add_moving_summary(self.cost)
-        add_moving_summary(tf.identity(loss1_total, name = 'heatmap_loss'))
-        add_moving_summary(tf.identity(loss2_total, name = 'paf_loss'))
+        for idx, loss1 in enumerate(loss1_list):
+            add_moving_summary(tf.identity(loss1_list[idx], name='stage%d_L1_loss' % idx))
+        for idx, loss2 in enumerate(loss2_list):
+            add_moving_summary(tf.identity(loss2_list[idx], name='stage%d_L2_loss' % idx))
+        add_moving_summary(tf.identity(loss1_total, name = 'L1_loss'))
+        add_moving_summary(tf.identity(loss2_total, name = 'L2_loss'))
 
-        # ht = tf.split(gt_heatmaps, 19, axis = -1)[0]
-        # xht = tf.split(heatmap_outputs[-1], 19, axis = -1)[0]
-        # tf.summary.image(name = 'gt_heatmap', tensor = ht, max_outputs=3)
-        # tf.summary.image(name = 'heatmap', tensor = xht, max_outputs=3)
         gt_joint_heatmaps = tf.split(gt_heatmaps, [18, 1], axis=3)[0]
         gt_heatmap_shown = tf.reduce_max(gt_joint_heatmaps, axis=3, keep_dims=True)
         joint_heatmaps = tf.split(heatmap_outputs[-1], [18, 1], axis=3)[0]

@@ -228,6 +228,7 @@ class Data(RNGDataFlow):
             # read img, mask, and label data
             img_path = os.path.join(self.images_dir, '%012d.jpg' % img_id)
             img = cv2.imread(img_path)
+            img = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
 
             mask_path = os.path.join(self.masks_dir, "mask_miss_%012d.png" % img_id)
             mask = cv2.imread(mask_path, 0)
