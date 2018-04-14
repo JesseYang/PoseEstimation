@@ -31,21 +31,19 @@ def pad_right_down_corner(img, stride, pad_value):
 
     return img_padded, pad
 
-def predict(args):
+def initialize(model_path):
     # prepare predictor
-    sess_init = SaverRestore(args.model_path)
+    sess_init = SaverRestore(model_path)
     model = Model('test')
     predict_config = PredictConfig(session_init = sess_init,
                                    model = model,
                                    input_names = ['imgs'],
                                    output_names = ['heatmaps', 'pafs'])
     predict_func = OfflinePredictor(predict_config)
+    return predict_func
 
-    img_bgr = cv2.imread(args.input_path)
-    img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
+def detect(img, predict_func, draw_result=False):
     h, w, _ = img.shape
-
 
     # 1. predict on multi scale images and average the results in different scales
     multiplier = [x * cfg.img_y / h for x in cfg.scale_search]
@@ -75,9 +73,10 @@ def predict(args):
 
     raw_heatmap_shown = np.maximum(0, heatmap_avg[:, :, 0:1] * 255)
     heatmap_shown = cv2.applyColorMap(raw_heatmap_shown.astype(np.uint8), cv2.COLORMAP_JET)
-    img_with_heatmap = cv2.addWeighted(heatmap_shown, 0.5, img_bgr, 0.5, 0)
+    img_with_heatmap = cv2.addWeighted(heatmap_shown, 0.5, img, 0.5, 0)
 
-    cv2.imwrite('heatmap_shown.jpg', img_with_heatmap)
+    if draw_result:
+        cv2.imwrite('heatmap_shown.jpg', img_with_heatmap)
 
 
     # 2. get the part results
@@ -174,7 +173,6 @@ def predict(args):
             special_k.append(k)
             connection_all.append([])
 
-
     # last number in each row is the total parts number of that person
     # the second last number in each row is the score of the overall configuration
     # flatten all peaks into the candidate list
@@ -195,46 +193,56 @@ def predict(args):
             # for each connection in the k-th kind of connections
             found = 0
             subset_idx = [-1, -1]
+            # count persons already detected and intersected with the new connection
             for j in range(len(subset)):
                 if subset[j][indexA] == partAs[i] or subset[j][indexB] == partBs[i]:
                     subset_idx[found] = j
                     found += 1
             
             if found == 1:
+                # only one person found, should add this new connection to this person
                 j = subset_idx[0]
                 if(subset[j][indexB] != partBs[i]):
                     subset[j][indexB] = partBs[i]
                     subset[j][-1] += 1
                     subset[j][-2] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
-            elif found == 2: # if found 2 and disjoint, merge them
+            elif found == 2:
+                # two persons found, should merge these two persons
                 j1, j2 = subset_idx
                 print("found = 2")
                 membership = ((subset[j1]>=0).astype(int) + (subset[j2]>=0).astype(int))[:-2]
-                if len(np.nonzero(membership == 2)[0]) == 0: #merge
+                if len(np.nonzero(membership == 2)[0]) == 0:
+                    # the two persons have no conflict, merge them
                     subset[j1][:-2] += (subset[j2][:-2] + 1)
                     subset[j1][-2:] += subset[j2][-2:]
                     subset[j1][-2] += connection_all[k][i][2]
                     subset = np.delete(subset, j2, 0)
                 else: # as like found == 1
-                    subset[j1][indexB] = partBs[i]
-                    subset[j1][-1] += 1
-                    subset[j1][-2] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
+                    # The person in the former has more confidence and should be updated with higher priority
+                    if subset[j1][indexB] != partBs[i]:
+                        subset[j1][indexB] = partBs[i]
+                        subset[j1][-1] += 1
+                        subset[j1][-2] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
     
             # if find no partA in the subset, create a new subset
             elif not found:
-                # each row represents a connection. The former 18 elements represents the global peak index
-                # since each connection only have two peaks related, there are only two values in the former 18 which are not -1
-                # the 19-th one is the total score and the 20-th one (last one) is set to 2
+                # Each row represents a new person. The former 18 elements represents the global peak index.
+                # Since when created, only one connection is added,
+                # and each connection only have two peaks related,
+                # there are only two values in the former 18 which are not -1
+                # The 19-th one is the total score.
+                # The 20-th one is set the parts already found for this person, should be 2 when created.
                 row = -1 * np.ones(20)
                 row[indexA] = partAs[i]
                 row[indexB] = partBs[i]
                 row[-1] = 2
-                # for row[-2]:
+                # caluclation of the score, i.e., row[-2]:
                 #   the former is the heat map values sum of the start and end part
                 #   the latter is the connection score calulated from paf
                 # thus, row[-2] represents the total score of this connection
                 row[-2] = sum(candidate[connection_all[k][i,:2].astype(int), 2]) + connection_all[k][i][2]
                 subset = np.vstack([subset, row])
+
 
     # delete some rows of subset which has few parts occur
     deleteIdx = [];
@@ -243,6 +251,9 @@ def predict(args):
             deleteIdx.append(i)
     subset = np.delete(subset, deleteIdx, axis=0)
 
+    return candidate, all_peaks, subset
+
+def visualize(img, candidate, all_peaks, subset):
     # visualize 1
     colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], \
               [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], \
@@ -300,11 +311,15 @@ if __name__ == '__main__':
     # img_id = 196283
     # img_id = 163640
     img_id = 262148
-    img_path = os.path.join('coco/train2017', '%012d.jpg' % img_id)
+    # img_path = os.path.join('coco/train2017', '%012d.jpg' % img_id)
+    img_path = 'ski.jpg'
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', help='path of model', required = True)
     parser.add_argument('--input_path', help='path of input data', default=img_path)
     args = parser.parse_args()
 
-    predict(args)
+    predict_func = initialize(args.model_path)
+    img = cv2.imread(img_path)
+    candidate, all_peaks, subset = detect(img, predict_func)
+    visualize(img, candidate, all_peaks, subset)

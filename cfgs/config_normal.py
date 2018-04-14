@@ -24,7 +24,7 @@ _.skip_adj = False
 _.augmentation = True
 _.backbone_grad_scale = 0.25
 
-_.debug = False
+_.debug = True
 _.debug_sample_num = 1600
 
 # the default oder in coco annotation is:
@@ -75,6 +75,6 @@ _.stages = 6
 _.scale_search = [0.5, 1, 1.5, 2]
 _.pad_value = 128
 
-_.base_lr = 8e-5
+_.base_lr = 1e-5
 _.momentum = 0.9
 _.weight_decay = 5e-4

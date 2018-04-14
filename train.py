@@ -46,12 +46,10 @@ class Model(ModelDesc):
         ]
 
     def _build_graph(self, inputs):
-        imgs, gt_heatmaps, gt_pafs, mask = inputs#, mask_heatmaps, mask_pafs = inputs
+        imgs, gt_heatmaps, gt_pafs, mask = inputs
     
-        # ========================== Preprocess ==========================
         imgs = image_preprocess(imgs, bgr=True)
 
-        # ========================== Forward ==========================
         heatmap_outputs, paf_outputs = [], []
         vgg_output = VGGBlock(imgs)
 
