@@ -42,6 +42,8 @@ _.to_body_part =   [0, 6, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3]
 # 12:left_knee   13:left_ankle    14:right_eye       15:left_eye
 # 16:right_ear   17:left_ear
 
+_.coco_to_ours = [0, 15, 14, 17, 16, 5, 2, 6, 3, 7, 4, 11, 8, 12, 9, 13, 10]
+
 # the limbs include:
 # 0:neck-->right_hip           1:right_hip-->right_knee      2:right_knee-->right_ankle      3:neck-->left_hip
 # 4:left_hip-->left_knee       5:left_knee-->left_ankle      6:neck-->right_shoulder         7:right_shoulder-->right_elbow
