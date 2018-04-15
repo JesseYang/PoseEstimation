@@ -209,7 +209,7 @@ def detect(img, predict_func, draw_result=False):
             elif found == 2:
                 # two persons found, should merge these two persons
                 j1, j2 = subset_idx
-                print("found = 2")
+                # print("found = 2")
                 membership = ((subset[j1]>=0).astype(int) + (subset[j2]>=0).astype(int))[:-2]
                 if len(np.nonzero(membership == 2)[0]) == 0:
                     # the two persons have no conflict, merge them

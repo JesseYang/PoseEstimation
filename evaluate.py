@@ -55,6 +55,7 @@ if __name__ == '__main__':
                     key_points[coco_idx, 1] = peak[1]
                     key_points[coco_idx, 2] = 1
 
+                '''
                 temp = np.sum(key_points, 0)
                 ave_coord = temp[:2] / temp[2]
                 for coco_idx in range(len(cfg.coco_to_ours)):
@@ -62,6 +63,7 @@ if __name__ == '__main__':
                         key_points[coco_idx, 0] = ave_coord[0]
                         key_points[coco_idx, 1] = ave_coord[1]
                         key_points[coco_idx, 2] = 1
+                '''
 
                 key_points_list = list(key_points.reshape(-1))
                 result = {"image_id": img_id,
@@ -72,7 +74,7 @@ if __name__ == '__main__':
                 pred_results.append(result)
 
         result_json_str = json.dumps(pred_results)
-        f = open('output.json', 'w')
+        f = open(args.result_path, 'w')
         f.write(result_json_str)
         f.close()
         
