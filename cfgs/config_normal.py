@@ -22,7 +22,8 @@ _.img_x = 368
 _.skip_adj = False
 
 _.augmentation = True
-_.backbone_grad_scale = 0.25
+_.bias_lr_mult = 2
+_.lr_mult = 4
 
 _.debug = True
 _.debug_sample_num = 1600

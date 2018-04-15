@@ -63,11 +63,11 @@ class Model(ModelDesc):
         if self.apply_mask:
             w1 = apply_mask(branch1, mask)
             w2 = apply_mask(branch2, mask)
-            heatmap_outputs.append(w1)
-            paf_outputs.append(w2)
+            paf_outputs.append(w1)
+            heatmap_outputs.append(w2)
         else:
-            heatmap_outputs.append(branch1)
-            paf_outputs.append(branch2)
+            paf_outputs.append(branch1)
+            heatmap_outputs.append(branch2)
 
         # Stage T
         for i in range(2, cfg.stages + 1):
@@ -77,11 +77,11 @@ class Model(ModelDesc):
             if self.apply_mask:
                 w1 = apply_mask(branch1, mask)
                 w2 = apply_mask(branch2, mask)
-                heatmap_outputs.append(w1)
-                paf_outputs.append(w2)
+                paf_outputs.append(w1)
+                heatmap_outputs.append(w2)
             else:
-                heatmap_outputs.append(branch1)
-                paf_outputs.append(branch2)
+                paf_outputs.append(branch1)
+                heatmap_outputs.append(branch2)
 
 
         # ========================== Cost Functions ==========================
@@ -132,7 +132,12 @@ class Model(ModelDesc):
         if cfg.backbone_grad_scale != 1.0:
             opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
             gradprocs = [gradproc.ScaleGradient(
-                         [('conv[1-4]_[1-4]\/.*', cfg.backbone_grad_scale)])]
+                         [('conv.*/W', 1),
+                          ('conv.*/b', cfg.bias_lr_mult),
+                          ('stage_1.*/W', 1),
+                          ('stage_1.*/b', cfg.bias_lr_mult),
+                          ('stage_[2-6].*/W', cfg.lr_mult),
+                          ('stage_[2-6].*/b', cfg.lr_mult * cfg.bias_lr_mult)])]
             return optimizer.apply_grad_processors(opt, gradprocs)
         else:
             return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)

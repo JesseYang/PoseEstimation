@@ -51,7 +51,7 @@ def VGGBlock_ours(l):
 def Stage1Block(l, branch):
     assert branch in [1, 2]
     
-    ch_out = cfg.ch_heats if branch == 1 else cfg.ch_vectors
+    ch_out = cfg.ch_vectors if branch == 1 else cfg.ch_heats
 
     with tf.variable_scope('branch_%d' % branch):
         with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
@@ -60,7 +60,6 @@ def Stage1Block(l, branch):
                  .Conv2D('conv2', 128, 3)
                  .Conv2D('conv3', 128, 3)
                  .Conv2D('conv4', 512, 1)
-                 # .Conv2D('conv5', ch_out, 1)())
                  .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
 
     return l
@@ -70,7 +69,7 @@ def Stage1Block(l, branch):
 def StageTBlock(l, branch):
     assert branch in [1, 2]
     
-    ch_out = cfg.ch_heats if branch == 1 else cfg.ch_vectors
+    ch_out = cfg.ch_vectors if branch == 1 else cfg.ch_heats
 
     with tf.variable_scope('branch_%d' % branch):
         with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
@@ -81,7 +80,6 @@ def StageTBlock(l, branch):
                  .Conv2D('conv4', 128, 7)
                  .Conv2D('conv5', 128, 7)
                  .Conv2D('conv6', 128, 1)
-                 # .Conv2D('conv7', ch_out, 1)())
                  .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
 
     return l
