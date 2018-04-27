@@ -2,7 +2,7 @@ from pathlib import Path
 import pickle
 import os
 import sys
-sys.path.insert(1, '../coco/cocoapi/PythonAPI/')
+sys.path.insert(1, 'coco/cocoapi/PythonAPI/')
 from pycocotools.coco import COCO
 
 from tensorpack import *

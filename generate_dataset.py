@@ -1,7 +1,7 @@
 import os
 import cv2
 import sys
-sys.path.insert(1, '../coco/cocoapi/PythonAPI/')
+sys.path.insert(1, 'coco/cocoapi/PythonAPI/')
 from scipy.spatial.distance import cdist
 import numpy as np
 import pickle
@@ -145,9 +145,13 @@ def load_dataset(ann_path, images_dir, masks_dir, labels_dir):
 
 
 # load training set
+os.mkdir(cfg.train_masks_dir)
+os.mkdir(cfg.train_labels_dir)
 print("Generating training set")
 load_dataset(cfg.train_ann, cfg.train_images_dir, cfg.train_masks_dir, cfg.train_labels_dir)
 # load val set
+os.mkdir(cfg.val_masks_dir)
+os.mkdir(cfg.val_labels_dir)
 print("Generating validation set")
 load_dataset(cfg.val_ann, cfg.val_images_dir, cfg.val_masks_dir, cfg.val_labels_dir)
 

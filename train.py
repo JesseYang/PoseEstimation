@@ -9,7 +9,7 @@ from tensorpack.utils.gpu import get_nr_gpu
 from tensorpack.tfutils import optimizer, gradproc
 
 from cfgs.config import cfg
-from modules import VGGBlock_ours as VGGBlock, Stage1Block, StageTBlock
+from modules import VGGBlock, Stage1Block, StageTBlock
 from reader import Data
 
 def apply_mask(t, mask):
@@ -129,18 +129,15 @@ class Model(ModelDesc):
 
     def _get_optimizer(self):
         lr = get_scalar_var('learning_rate', cfg.base_lr, summary=True)
-        if cfg.backbone_grad_scale != 1.0:
-            opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
-            gradprocs = [gradproc.ScaleGradient(
-                         [('conv.*/W', 1),
-                          ('conv.*/b', cfg.bias_lr_mult),
-                          ('stage_1.*/W', 1),
-                          ('stage_1.*/b', cfg.bias_lr_mult),
-                          ('stage_[2-6].*/W', cfg.lr_mult),
-                          ('stage_[2-6].*/b', cfg.lr_mult * cfg.bias_lr_mult)])]
-            return optimizer.apply_grad_processors(opt, gradprocs)
-        else:
-            return tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
+        opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=cfg.momentum)
+        gradprocs = [gradproc.ScaleGradient(
+                     [('conv.*/W', 1),
+                      ('conv.*/b', cfg.bias_lr_mult),
+                      ('stage_1.*/W', 1),
+                      ('stage_1.*/b', cfg.bias_lr_mult),
+                      ('stage_[2-6].*/W', cfg.lr_mult),
+                      ('stage_[2-6].*/b', cfg.lr_mult * cfg.bias_lr_mult)])]
+        return optimizer.apply_grad_processors(opt, gradprocs)
 
 
 def get_data(train_or_test, batch_size):

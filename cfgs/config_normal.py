@@ -25,7 +25,7 @@ _.augmentation = True
 _.bias_lr_mult = 2
 _.lr_mult = 4
 
-_.debug = True
+_.debug = False
 _.debug_sample_num = 1600
 
 # the default oder in coco annotation is:
@@ -78,6 +78,6 @@ _.stages = 6
 _.scale_search = [0.5, 1, 1.5, 2]
 _.pad_value = 128
 
-_.base_lr = 1e-5
+_.base_lr = 2e-5
 _.momentum = 0.9
 _.weight_decay = 5e-4
