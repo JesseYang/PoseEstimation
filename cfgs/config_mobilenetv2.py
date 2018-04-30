@@ -1,6 +1,8 @@
 from easydict import EasyDict as edict
 
 _ = cfg = edict()
+cfg.backbone = 'mobilenetv2'
+
 _.train_ann = 'coco/annotations/person_keypoints_train2017.json'
 _.val_ann = 'coco/annotations/person_keypoints_val2017.json'
 

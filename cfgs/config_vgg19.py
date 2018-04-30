@@ -1,6 +1,8 @@
 from easydict import EasyDict as edict
 
 _ = cfg = edict()
+cfg.backbone = 'vgg19'
+
 _.train_ann = 'coco/annotations/person_keypoints_train2017.json'
 _.val_ann = 'coco/annotations/person_keypoints_val2017.json'
 
@@ -22,9 +24,10 @@ _.img_x = 368
 _.skip_adj = False
 
 _.augmentation = True
-_.backbone_grad_scale = 0.25
+_.bias_lr_mult = 2
+_.lr_mult = 4
 
-_.debug = True
+_.debug = False
 _.debug_sample_num = 1600
 
 # the default oder in coco annotation is:
@@ -41,6 +44,8 @@ _.to_body_part =   [0, 6, 6, 8, 10, 5, 7, 9, 12, 14, 16, 11, 13, 15, 2, 1, 4, 3]
 # 8:right_hip    9:right_knee     10:right_anckle    11:left_hip
 # 12:left_knee   13:left_ankle    14:right_eye       15:left_eye
 # 16:right_ear   17:left_ear
+
+_.coco_to_ours = [0, 15, 14, 17, 16, 5, 2, 6, 3, 7, 4, 11, 8, 12, 9, 13, 10]
 
 # the limbs include:
 # 0:neck-->right_hip           1:right_hip-->right_knee      2:right_knee-->right_ankle      3:neck-->left_hip
@@ -75,6 +80,6 @@ _.stages = 6
 _.scale_search = [0.5, 1, 1.5, 2]
 _.pad_value = 128
 
-_.base_lr = 1e-5
+_.base_lr = 2e-5
 _.momentum = 0.9
 _.weight_decay = 5e-4

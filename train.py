@@ -9,7 +9,10 @@ from tensorpack.utils.gpu import get_nr_gpu
 from tensorpack.tfutils import optimizer, gradproc
 
 from cfgs.config import cfg
-from modules import VGGBlock, Stage1Block, StageTBlock
+if cfg.backbone == 'vgg19':
+    from modules import VGGBlock as Backbone, Stage1Block, StageTBlock
+else:
+    from modules import Mobilenetv2Block as Backbone, Stage1Block, StageTBlock
 from reader import Data
 
 def apply_mask(t, mask):
@@ -51,7 +54,7 @@ class Model(ModelDesc):
         imgs = image_preprocess(imgs, bgr=True)
 
         heatmap_outputs, paf_outputs = [], []
-        vgg_output = VGGBlock(imgs)
+        vgg_output = Backbone(imgs)
 
         # vgg_output = tf.stop_gradient(vgg_output)
         vgg_output = tf.identity(vgg_output, name='vgg_features')
