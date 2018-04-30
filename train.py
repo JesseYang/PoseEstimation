@@ -12,7 +12,7 @@ from cfgs.config import cfg
 if cfg.backbone == 'vgg19':
     from modules import VGGBlock as Backbone, Stage1Block, StageTBlock
 else:
-    from modules import Mobilenetv2Block as Backbone, Stage1Block, StageTBlock
+    from modules import Mobilenetv2Block as Backbone, Stage1DepthBlock as Stage1Block, StageTDepthBlock as StageTBlock
 from reader import Data
 
 def apply_mask(t, mask):
@@ -136,6 +136,8 @@ class Model(ModelDesc):
         gradprocs = [gradproc.ScaleGradient(
                      [('conv.*/W', 1),
                       ('conv.*/b', cfg.bias_lr_mult),
+                      ('bottleneck.*/W', 1),
+                      ('bottleneck.*/b', cfg.bias_lr_mult),
                       ('stage_1.*/W', 1),
                       ('stage_1.*/b', cfg.bias_lr_mult),
                       ('stage_[2-6].*/W', cfg.lr_mult),
@@ -178,7 +180,7 @@ def get_data(train_or_test, batch_size):
     ds = BatchData(ds, batch_size, remainder = not is_train)
     return ds, sample_num
 
-def get_config(args):
+def get_config(args, model):
     ds_train, sample_num = get_data('train', args.batch_size_per_gpu)
     ds_val, _ = get_data('test', args.batch_size_per_gpu)
 
@@ -190,7 +192,7 @@ def get_config(args):
             #                 every_k_epochs=3),
             HumanHyperParamSetter('learning_rate'),
         ],
-        model = Model(),
+        model = model,
         steps_per_epoch = sample_num // (args.batch_size_per_gpu * get_nr_gpu()),
     )
 
@@ -202,18 +204,41 @@ if __name__ == '__main__':
     parser.add_argument('--load', help='load model')
     parser.add_argument('--batch_size_per_gpu', type=int, default=16)
     parser.add_argument('--logdir', help="directory of logging", default=None)
+    parser.add_argument('--flops', action="store_true", help="print flops and exit")
     args = parser.parse_args()
-    if args.logdir != None:
-        logger.set_logger_dir(os.path.join("train_log", args.logdir))
-    else:
-        logger.auto_set_dir()
 
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-        # config.nr_tower = get_nr_gpu()
-    config = get_config(args)
-    if args.load:
-        config.session_init = get_model_loader(args.load)
-    
-    trainer = SyncMultiGPUTrainerParameterServer(get_nr_gpu())
-    launch_train_with_config(config, trainer)
+
+    model = Model()
+    if args.flops:
+        output_y = int(cfg.img_y / cfg.stride)
+        output_x = int(cfg.img_x / cfg.stride)
+
+        input_desc = [
+            InputDesc(tf.float32, (1, cfg.img_y, cfg.img_x, 3), 'imgs'),
+            InputDesc(tf.float32, (1, output_y, output_x, cfg.ch_heats), 'gt_heatmaps'),
+            InputDesc(tf.float32, (1, output_y, output_x, cfg.ch_vectors), 'gt_pafs'),
+            InputDesc(tf.float32, (1, output_y, output_x, 1), 'mask')
+        ]
+        input = PlaceholderInput()
+        input.setup(input_desc)
+        with TowerContext('', is_training=True):
+            model.build_graph(*input.get_input_tensors())
+
+        tf.profiler.profile(
+            tf.get_default_graph(),
+            cmd='op',
+            options=tf.profiler.ProfileOptionBuilder.float_operation())
+    else:
+        if args.logdir != None:
+            logger.set_logger_dir(os.path.join("train_log", args.logdir))
+        else:
+            logger.auto_set_dir()
+
+        config = get_config(args, model)
+        if args.load:
+            config.session_init = get_model_loader(args.load)
+        
+        trainer = SyncMultiGPUTrainerParameterServer(get_nr_gpu())
+        launch_train_with_config(config, trainer)

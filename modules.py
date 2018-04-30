@@ -86,6 +86,8 @@ def Mobilenetv2Block(l, data_format='NHWC'):
         conv7 = l
 
         '''
+        return conv7
+
         conv1_pool = MaxPooling('pool1', conv1, 2, strides=2)
         conv7_upsample = tf.image.resize_bilinear(conv7,
                                                   [tf.shape(conv7)[1] * 2, tf.shape(conv7)[2] * 2],
@@ -93,8 +95,11 @@ def Mobilenetv2Block(l, data_format='NHWC'):
         channel_axis = 1 if data_format == 'NCHW' else 3
         features = tf.concat([conv1_pool, conv4, conv7_upsample], channel_axis, name='backbone_features')
         '''
+        conv4_pool = MaxPooling('pool4', conv4, 2, strides=2)
+        channel_axis = 1 if data_format == 'NCHW' else 3
+        features = tf.concat([conv4_pool, conv7], channel_axis, name='backbone_features')
 
-        return conv7
+        return features
         
 @layer_register(log_shape=True)
 def Stage1Block(l, branch):
@@ -108,6 +113,29 @@ def Stage1Block(l, branch):
                  .Conv2D('conv1', 128, 3)
                  .Conv2D('conv2', 128, 3)
                  .Conv2D('conv3', 128, 3)
+                 .Conv2D('conv4', 512, 1)
+                 .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
+
+    return l
+        
+@layer_register(log_shape=True)
+def Stage1DepthBlock(l, branch):
+    assert branch in [1, 2]
+    
+    in_shape = l.get_shape().as_list()
+    ch_in = in_shape[3]
+    ch_out = cfg.ch_vectors if branch == 1 else cfg.ch_heats
+
+    with tf.variable_scope('branch_%d' % branch):
+        with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
+            l = (LinearWrap(l)
+                 .DepthConv('conv1_depth', ch_in, 3)
+                 .Conv2D('conv1', 128, 1)
+                 .DepthConv('conv2_depth', 128, 3)
+                 .Conv2D('conv2', 128, 1)
+                 .DepthConv('conv3_depth', 128, 3)
+                 .Conv2D('conv3', 128, 1)
+                 .DepthConv('conv4_depth', 512, 1)
                  .Conv2D('conv4', 512, 1)
                  .Conv2D('conv5', ch_out, 1, nl=tf.identity)())
 
@@ -128,6 +156,29 @@ def StageTBlock(l, branch):
                  .Conv2D('conv3', 128, 7)
                  .Conv2D('conv4', 128, 7)
                  .Conv2D('conv5', 128, 7)
+                 .Conv2D('conv6', 128, 1)
+                 .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
+
+    return l
+
+@layer_register(log_shape=True)
+def StageTDepthBlock(l, branch):
+    assert branch in [1, 2]
+    
+    in_shape = l.get_shape().as_list()
+    ch_in = in_shape[3]
+    ch_out = cfg.ch_vectors if branch == 1 else cfg.ch_heats
+
+    with tf.variable_scope('branch_%d' % branch):
+        with argscope(Conv2D, W_init=tf.random_normal_initializer(stddev=0.01), nl=tf.nn.relu):
+            l = (LinearWrap(l)
+                 .DepthConv('conv1_depth', ch_in, 7)
+                 .Conv2D('conv1', 128, 1)
+                 .DepthConv('conv2_depth', 128, 7)
+                 .Conv2D('conv2', 128, 1)
+                 .DepthConv('conv3_depth', 128, 7)
+                 .Conv2D('conv3', 128, 1)
+                 .DepthConv('conv6_depth', 128, 1)
                  .Conv2D('conv6', 128, 1)
                  .Conv2D('conv7', ch_out, 1, nl=tf.identity)())
 

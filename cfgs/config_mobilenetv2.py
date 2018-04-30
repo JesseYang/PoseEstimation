@@ -63,6 +63,7 @@ for idx in range(len(_.limb_from)):
     _.map_idx.append([2 * idx, 2 * idx + 1])
 
 _.stride = 8
+# _.stride = 4
 
 _.sigma = 7
 
