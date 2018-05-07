@@ -12,7 +12,8 @@ from cfgs.config import cfg
 if cfg.backbone == 'vgg19':
     from modules import VGGBlock as Backbone, Stage1Block, StageTBlock
 else:
-    from modules import Mobilenetv2Block as Backbone, Stage1DepthBlock as Stage1Block, StageTDepthBlock as StageTBlock
+    # from modules import Mobilenetv2Block as Backbone, Stage1DepthBlock as Stage1Block, StageTDepthBlock as StageTBlock
+    from modules import Mobilenetv2Block as Backbone, Stage1Block, StageTBlock
 from reader import Data
 
 def apply_mask(t, mask):

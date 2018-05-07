@@ -85,8 +85,8 @@ def Mobilenetv2Block(l, data_format='NHWC'):
                     l = bottleneck_v2(l, out_channel=32, t=6, stride=2 if j == 0 else 1)
         conv7 = l
 
-        '''
         return conv7
+        '''
 
         conv1_pool = MaxPooling('pool1', conv1, 2, strides=2)
         conv7_upsample = tf.image.resize_bilinear(conv7,
@@ -95,9 +95,11 @@ def Mobilenetv2Block(l, data_format='NHWC'):
         channel_axis = 1 if data_format == 'NCHW' else 3
         features = tf.concat([conv1_pool, conv4, conv7_upsample], channel_axis, name='backbone_features')
         '''
+        '''
         conv4_pool = MaxPooling('pool4', conv4, 2, strides=2)
         channel_axis = 1 if data_format == 'NCHW' else 3
         features = tf.concat([conv4_pool, conv7], channel_axis, name='backbone_features')
+        '''
 
         return features
         

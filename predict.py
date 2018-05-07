@@ -320,6 +320,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     predict_func = initialize(args.model_path)
-    img = cv2.imread(img_path)
+    img = cv2.imread(args.input_path)
     candidate, all_peaks, subset = detect(img, predict_func)
     visualize(img, candidate, all_peaks, subset)
